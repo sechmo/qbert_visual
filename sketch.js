@@ -1,4 +1,50 @@
-let map;
+class QbertGame {
+  /**
+   * 
+   * @param {IsometricProjection} proj 
+   */
+  constructor(proj) {
+    this.size = 7;
+    this.#initMap();
+  }
+
+  #initMap() {
+    const size = this.size;
+    // this represents the map as a 2d array that includes 
+    // the border empty spaces
+    const heightMap = []
+    this.zeroPlane = createVector(1,1) // actual coordinates of zero in the array
+    // this represents the tile states / times pressed
+    const stateMap = []
+    const tiles = [];
+    for (let i = -1; i < size + 1; i++) {
+      const heightRow = [];
+      const stateRow = [];
+      for (let j = -1; j < size - i + 1; j++) {
+        let height;
+        if (i < 0 || i >= size || j < 0 || j >= size - i) {
+          height = NaN;
+        } else {
+          height = size - i - j;
+          tiles.push(createVector(i, j, height));
+        }
+        heightRow.push(height);
+        stateRow.push(0);
+      }
+      heightMap.push(heightRow)
+    }
+
+    this.heightMap = heightMap;
+    this.stateMap = stateMap;
+    this.mapRender = new IsometricMap(tiles, proj);
+  }
+
+  draw() {
+    this.mapRender.draw();
+  }
+}
+
+let game;
 let proj;
 let count = 0;
 function setup() {
@@ -11,20 +57,21 @@ function setup() {
   frameRate(7);
   angleMode(DEGREES);
   proj = new IsometricProjection(CENTER, ANGLE, TILE_SIDE)
-  map = new IsometricMap([
-    createVector(0, 0, 0), 
-    createVector(1, 1, 0), 
-    createVector(1, 2, 0), 
-    createVector(1, 0, 1), 
-    createVector(1, -1, 0),
-    createVector(1, -2, 0),
-    createVector(1, 0, -1),
-  ], proj);
+  // map = new IsometricMap([
+  //   createVector(0, 0, 0), 
+  //   createVector(1, 1, 0), 
+  //   createVector(1, 2, 0), 
+  //   createVector(1, 0, 1), 
+  //   createVector(1, -1, 0),
+  //   createVector(1, -2, 0),
+  //   createVector(1, 0, -1),
+  // ], proj);
+  game = new QbertGame(proj);
 }
 
 function draw() {
   background(220);
-  map.draw();
+  game.draw();
   const n = 12
   if (count < n) {
     proj.zero.add(proj.xUnit);
