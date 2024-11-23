@@ -7,20 +7,20 @@ class SpriteSheet {
 
   addSpec(name, x, y, w, h) {
     this.spec[name] = {
-      x,y,w,h
+      x, y, w, h
     }
   }
 
   getSprite(name) {
-    if (!Object.hasOwn(this.spec, name))  {
+    if (!Object.hasOwn(this.spec, name)) {
       throw `no sprite registered with name "${name}"`
     }
 
     const spec = this.spec[name];
 
     // lazy load sprite
-    if (!Object.hasOwn(spec,"sprite")) {
-      spec.sprite = this.baseImage.get(spec.x,spec.y,spec.w,spec.h);
+    if (!Object.hasOwn(spec, "sprite")) {
+      spec.sprite = this.baseImage.get(spec.x, spec.y, spec.w, spec.h);
     }
 
     return spec.sprite;
@@ -42,7 +42,7 @@ class Qbert {
   }
 
 
-  draw() {}
+  draw() { }
 }
 
 class QbertGame {
@@ -60,7 +60,7 @@ class QbertGame {
     // this represents the map as a 2d array that includes 
     // the border empty spaces
     const heightMap = []
-    this.zeroPlane = createVector(1,1) // actual coordinates of zero in the array
+    this.zeroPlane = createVector(1, 1) // actual coordinates of zero in the array
     // this represents the tile states / times pressed
     const stateMap = []
     const tiles = [];
@@ -86,8 +86,8 @@ class QbertGame {
     this.mapRender = new IsometricMap(tiles, proj);
   }
 
-  draw() {
-    this.mapRender.draw();
+  draw(cnv) {
+    this.mapRender.draw(cnv);
   }
 }
 
@@ -101,27 +101,33 @@ let game;
 let ss;
 let proj;
 let count = 0;
+let buffer;
+let screenSize;
+let scale;
+let scaledScreenSize;
 function setup() {
   const TILE_SIDE = 16 // px
   const ANGLE = 25; // the angle between the axis (x or y) and the horizontal
-  const SCREEN_SIZE = createVector(400, 400);
-  const CENTER = p5.Vector.mult(SCREEN_SIZE, 0.5);
+  screenSize = createVector(400, 400);
+  const CENTER = p5.Vector.mult(screenSize, 0.5);
+  scale = 4;
+  scaledScreenSize = screenSize.copy().mult(scale);
 
-  const cvn = createCanvas(SCREEN_SIZE.x, SCREEN_SIZE.y);
+  createCanvas(scaledScreenSize.x, scaledScreenSize.y);
   frameRate(7);
   angleMode(DEGREES);
+
+  buffer = createGraphics(screenSize.x, screenSize.y)
+  buffer.pixelDensity(1);
+
   ss = new SpriteSheet(spriteSheetImg);
-  ss.addSpec("qbert1", 0,0, 16,16)
-
-  noSmooth(); // to resize sprites without losing resolution
-
-
+  ss.addSpec("qbert1", 0, 0, 16, 16)
+  noSmooth();
 
 
   proj = new IsometricProjection(CENTER, ANGLE, TILE_SIDE);
   game = new QbertGame(proj);;
 
-  console.log(proj.zUnit);
 }
 
 function draw() {
@@ -133,15 +139,17 @@ function draw() {
   //   proj.zero.sub(proj.xUnit.copy().mult(2 * n));
   // }
 
-  background(220);
-  game.draw();
-  imageMode(CENTER);
-  let pos = createVector(0,0,8)
+  buffer.background(1);
+  game.draw(buffer);
+  buffer.imageMode(CENTER);
+  let pos = createVector(0, 0, 8)
   pos = proj.projectTo2D(pos);
-  quad(pos.x, pos.y, pos.x+10, pos.y, pos.x+10, pos.y + 10, pos.x, pos.y+10)
-  
+  // quad(pos.x, pos.y, pos.x+10, pos.y, pos.x+10, pos.y + 10, pos.x, pos.y+10)
+
   let size = createVector(16, 16);
   console.log(size.toString(), proj.zUnit.toString());
-  image(ss.getSprite("qbert1"), pos.x, pos.y, size.x,size.y);
+  buffer.image(ss.getSprite("qbert1"), pos.x, pos.y, size.x, size.y);
   count++;
+
+  image(buffer, 0, 0, scaledScreenSize.x, scaledScreenSize.y);
 }

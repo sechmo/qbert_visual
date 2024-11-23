@@ -9,9 +9,16 @@ class Tile {
     this.proj = proj;
   }
 
-  draw() {
+  draw(cnv) {
     const vecQuad = (v1, v2, v3, v4) => {
-      quad(v1.x, v1.y, v2.x, v2.y, v3.x, v3.y, v4.x, v4.y);
+      // this has aliased borders either way :c
+      cnv.quad(v1.x, v1.y, v2.x, v2.y, v3.x, v3.y, v4.x, v4.y);
+      // cnv.beginShape()
+      // cnv.vertex(v1.x,v1.y);
+      // cnv.vertex(v2.x,v2.y);
+      // cnv.vertex(v3.x,v3.y);
+      // cnv.vertex(v4.x,v4.y);
+      // cnv.endShape(CLOSE);
     }
 
 
@@ -20,9 +27,10 @@ class Tile {
 
     // notice you can reuse each to draw back faces (if needed)
     const pos = this.pos;
+    cnv.noStroke();
 
     // top face
-    fill("red");
+    cnv.fill("green");
     const topCorners = [
       pos.copy().add([0, 0, 1]), // ·
       pos.copy().add([1, 0, 1]), // ·, ↘
@@ -32,7 +40,7 @@ class Tile {
     vecQuad(...topCorners.map(v => this.proj.projectTo2D(v)));
 
     // Y face
-    fill("green");
+    cnv.fill("red");
     const yCorners = [
       pos.copy().add([0, 1, 0]),
       pos.copy().add([1, 1, 0]),
@@ -42,7 +50,7 @@ class Tile {
     vecQuad(...yCorners.map(v => this.proj.projectTo2D(v)));
 
     // X face
-    fill("blue");
+    cnv.fill("blue");
     const xCorners = [
       pos.copy().add([1, 0, 0]),
       pos.copy().add([1, 1, 0]),
@@ -90,9 +98,9 @@ class IsometricMap {
     })
   }
 
-  draw() {
+  draw(cnv) {
     for (const tile of this.tiles) {
-      tile.draw();
+      tile.draw(cnv);
     }
   }
 }
