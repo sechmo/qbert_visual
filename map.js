@@ -40,7 +40,7 @@ class Tile {
     vecQuad(...topCorners.map(v => this.proj.projectTo2D(v)));
 
     // Y face
-    cnv.fill("red");
+    cnv.fill("purple");
     const yCorners = [
       pos.copy().add([0, 1, 0]),
       pos.copy().add([1, 1, 0]),
