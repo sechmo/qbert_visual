@@ -1,48 +1,133 @@
 
-class SpriteSheet {
-  constructor(baseImage) {
-    this.baseImage = baseImage;
-    this.spec = {};
-  }
+const DIRECTION = Object.freeze({
+  POS_X: "POS_X",
+  NEG_X: "NEG_X",
+  POS_Y: "POS_Y",
+  NEG_Y: "NEG_Y",
+})
 
-  addSpec(name, x, y, w, h) {
-    this.spec[name] = {
-      x, y, w, h
-    }
-  }
-
-  getSprite(name) {
-    if (!Object.hasOwn(this.spec, name)) {
-      throw `no sprite registered with name "${name}"`
-    }
-
-    const spec = this.spec[name];
-
-    // lazy load sprite
-    if (!Object.hasOwn(spec, "sprite")) {
-      spec.sprite = this.baseImage.get(spec.x, spec.y, spec.w, spec.h);
-    }
-
-    return spec.sprite;
+function dirToVec(dir) {
+  switch (dir) {
+    case DIRECTION.POS_X:
+      return createVector(1, 0);
+    case DIRECTION.NEG_X:
+      return createVector(-1, 0);
+    case DIRECTION.POS_Y:
+      return createVector(0, 1);
+    case DIRECTION.NEG_Y:
+      return createVector(0, -1);
+    default:
+      throw `invalid DIRECTION "${dir}"`
   }
 }
 
+const POSE = Object.freeze({
+  UP: "UP",
+  DOWN: "DOWN",
+})
+
+const STATE = Object.freeze({
+  IDLE: "IDLE",
+  JUMPING: "JUMPING",
+})
 class Qbert {
   static sprites = {};
   static spritesLoaded = false;
   constructor(spriteSheet) {
-    if (!spritesLoaded) {
-      this.#loadSprites(spriteSheet);
+    Qbert.#loadSprites(spriteSheet);
+
+    this.frameCount = 0;
+    this.direction = DIRECTION.POS_X;
+    this.state = STATE.IDLE;
+  }
+
+  static #loadSprites(spriteSheet) {
+    if (Qbert.spritesLoaded) {
+      return;
+    }
+    spriteSheet.addSpec("qbert_down_neg_x", 0, 0, 16, 16);
+    spriteSheet.addSpec("qbert_up_neg_x", 16, 0, 16, 16);
+    spriteSheet.addSpec("qbert_down_neg_y", 32, 0, 16, 16);
+    spriteSheet.addSpec("qbert_up_neg_y", 48, 0, 16, 16);
+    spriteSheet.addSpec("qbert_down_pos_x", 64, 0, 16, 16);
+    spriteSheet.addSpec("qbert_up_pos_x", 80, 0, 16, 16);
+    spriteSheet.addSpec("qbert_down_pos_y", 96, 0, 16, 16);
+    spriteSheet.addSpec("qbert_up_pos_y", 112, 0, 16, 16);
+
+    Qbert.sprites = {
+      [DIRECTION.NEG_X]: {
+        [POSE.UP]: spriteSheet.getSprite("qbert_up_neg_x"),
+        [POSE.DOWN]: spriteSheet.getSprite("qbert_down_neg_x"),
+      },
+      [DIRECTION.POS_X]: {
+        [POSE.UP]: spriteSheet.getSprite("qbert_up_pos_x"),
+        [POSE.DOWN]: spriteSheet.getSprite("qbert_down_pos_x"),
+      },
+      [DIRECTION.NEG_Y]: {
+        [POSE.UP]: spriteSheet.getSprite("qbert_up_neg_y"),
+        [POSE.DOWN]: spriteSheet.getSprite("qbert_down_neg_y"),
+      },
+      [DIRECTION.POS_Y]: {
+        [POSE.UP]: spriteSheet.getSprite("qbert_up_pos_y"),
+        [POSE.DOWN]: spriteSheet.getSprite("qbert_down_pos_y"),
+      },
+    }
+
+
+  }
+
+  update() {
+    switch (this.state) {
+      case STATE.IDLE:
+        this.frameCount++;
+        return;
+      case STATE.JUMPING:
+        if (this.frameCount >= 12) {
+          this.frameCount = 0;
+          this.state = STATE.IDLE;
+          return
+        }
+        this.frameCount++
+        return;
     }
   }
 
-  #loadSprites(spriteSheet) {
+  draw(cnv, pos) {
+    // const sprites = [
+    //   Qbert.sprites[DIRECTION.NEG_X][POSE.UP],
+    //   Qbert.sprites[DIRECTION.NEG_X][POSE.DOWN],
+    //   Qbert.sprites[DIRECTION.POS_X][POSE.UP],
+    //   Qbert.sprites[DIRECTION.POS_X][POSE.DOWN],
+    //   Qbert.sprites[DIRECTION.NEG_Y][POSE.UP],
+    //   Qbert.sprites[DIRECTION.NEG_Y][POSE.DOWN],
+    //   Qbert.sprites[DIRECTION.POS_Y][POSE.UP],
+    //   Qbert.sprites[DIRECTION.POS_Y][POSE.DOWN],
+    // ];
 
+    // const spriteIndex = floor(this.frameCount);
+    // const sprite = sprites[spriteIndex];
 
+    // this.frameCount = (this.frameCount + 1) % sprites.length;
+
+    let sprite;
+    switch (this.state) {
+      case STATE.IDLE:
+        sprite = Qbert.sprites[this.direction][POSE.DOWN];
+        break;
+      case STATE.JUMPING:
+        sprite = Qbert.sprites[this.direction][POSE.UP];
+        break;
+    }
+
+    // cnv.imageMode(CENTER);
+    cnv.image(sprite, pos.x, pos.y);
   }
 
+  startJump() {
+    this.state = STATE.JUMPING;
+    frameCount = 0;
+  }
 
-  draw() { }
 }
 
 class QbertGame {
@@ -50,9 +135,12 @@ class QbertGame {
    * 
    * @param {IsometricProjection} proj 
    */
-  constructor(proj) {
+  constructor(proj, spriteSheet) {
     this.size = 7;
+    this.proj = proj;
     this.#initMap();
+
+    this.entities[this.zeroPlane.x][this.zeroPlane.y].push(new Qbert(spriteSheet))
   }
 
   #initMap() {
@@ -62,32 +150,72 @@ class QbertGame {
     const heightMap = []
     this.zeroPlane = createVector(1, 1) // actual coordinates of zero in the array
     // this represents the tile states / times pressed
-    const stateMap = []
+    const tileStates = [];
     const tiles = [];
-    for (let i = -1; i < size + 1; i++) {
+    const entities = [];
+    for (let x = -1; x < size + 1; x++) {
       const heightRow = [];
       const stateRow = [];
-      for (let j = -1; j < size - i + 1; j++) {
-        let height;
-        if (i < 0 || i >= size || j < 0 || j >= size - i) {
-          height = NaN;
+      const entityRow = [];
+      for (let y = -1; y < size - x + 1; y++) {
+        let z;
+        if (x < 0 || x >= size || y < 0 || y >= size - x) {
+          z = NaN;
         } else {
-          height = size - i - j;
-          tiles.push(createVector(i, j, height));
+          z = size - x - y;
+          tiles.push(createVector(x, y, z));
         }
-        heightRow.push(height);
+        heightRow.push(z);
         stateRow.push(0);
+        entityRow.push([]);
       }
-      heightMap.push(heightRow)
+      heightMap.push(heightRow);
+      tileStates.push(stateRow);
+      entities.push(entityRow);
     }
 
     this.heightMap = heightMap;
-    this.stateMap = stateMap;
+    this.tileStates = tileStates;
+    this.entities = entities;
     this.mapRender = new IsometricMap(tiles, proj);
   }
+  // utility function to ease iterating over one of the maps
+  #mapIter(map, func) {
+    for (let x = -1; x < this.size + 1; x++) {
+      for (let y = -1; y < this.size - x + 1; y++) {
+        const z = this.heightMap[x+1][y+1]
+        func(createVector(x,y,z), map[x + 1][y + 1]);
+      }
+    }
+  }
+
+  update() {
+    // lets iterate over the entity map and run events for all the entities found
+    // note that this is easier than keeping just an entity list since this way 
+    // it's easier to check for collisions vs the O(n^2) alternative of checking 
+    // for every pair of entities or more complex alternatives.
+
+    this.#mapIter(this.entities, (pos, tileEntities) => {
+      for (const entity of tileEntities) {
+        console.log(pos.toString(), entity.constructor.name, entity);
+      }
+    })
+
+
+
+  }
+
 
   draw(cnv) {
     this.mapRender.draw(cnv);
+    this.#mapIter(this.entities, (pos, tileEntities) => {
+      for (const entity of tileEntities) {
+        // entities are nicely rendered in an ismoetric map if the sprite center
+        // is one unit above the tile they are in
+        const renderPos = pos.copy().add([0,0,1])
+        entity.draw(cnv, this.proj.projectTo2D(renderPos))
+      }
+    })
   }
 }
 
@@ -106,28 +234,30 @@ let screenSize;
 let scale;
 let scaledScreenSize;
 function setup() {
-  const TILE_SIDE = 16 // px
-  const ANGLE = 25; // the angle between the axis (x or y) and the horizontal
+  const tileSize = 16 // px
+  angleMode(DEGREES);
+  const angle = 25; // the angle between the axis (x or y) and the horizontal
   screenSize = createVector(400, 400);
-  const CENTER = p5.Vector.mult(screenSize, 0.5);
+  const screenCenter = screenSize.copy().mult(0.5);
   scale = 4;
   scaledScreenSize = screenSize.copy().mult(scale);
 
   createCanvas(scaledScreenSize.x, scaledScreenSize.y);
   frameRate(7);
-  angleMode(DEGREES);
 
   buffer = createGraphics(screenSize.x, screenSize.y)
+  buffer.imageMode(CENTER);
   buffer.pixelDensity(1);
-
-  ss = new SpriteSheet(spriteSheetImg);
-  ss.addSpec("qbert1", 0, 0, 16, 16)
   noSmooth();
 
+  ss = new SpriteSheet(spriteSheetImg);
 
-  proj = new IsometricProjection(CENTER, ANGLE, TILE_SIDE);
-  game = new QbertGame(proj);;
 
+  proj = new IsometricProjection(screenCenter, angle, tileSize);
+  game = new QbertGame(proj, ss);;
+
+
+  background(255);
 }
 
 function draw() {
@@ -139,16 +269,11 @@ function draw() {
   //   proj.zero.sub(proj.xUnit.copy().mult(2 * n));
   // }
 
+  game.update();
+
+
   buffer.background(1);
   game.draw(buffer);
-  buffer.imageMode(CENTER);
-  let pos = createVector(0, 0, 8)
-  pos = proj.projectTo2D(pos);
-  // quad(pos.x, pos.y, pos.x+10, pos.y, pos.x+10, pos.y + 10, pos.x, pos.y+10)
-
-  let size = createVector(16, 16);
-  console.log(size.toString(), proj.zUnit.toString());
-  buffer.image(ss.getSprite("qbert1"), pos.x, pos.y, size.x, size.y);
   count++;
 
   image(buffer, 0, 0, scaledScreenSize.x, scaledScreenSize.y);
