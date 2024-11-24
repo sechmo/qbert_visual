@@ -14,10 +14,18 @@ class Projection {
   }
 
   projectTo2D(vec) {
+    // console.log("----------------------")
+    // console.log("vec", vec.toString());
     const x = this.xUnit.copy().mult(vec.x);
     const y = this.yUnit.copy().mult(vec.y);
     const z = this.zUnit.copy().mult(vec.z);
-    return this.zero.copy().add(x).add(y).add(z);
+    let res = this.zero.copy().add(x).add(y).add(z);
+    // console.log("res", res.toString());
+    // return res;
+    // don't allow fractional pixels
+    res = createVector(round(res.x), round(res.y));
+    // console.log("resRound", res.toString());
+    return res;
   }
 }
 
