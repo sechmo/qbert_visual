@@ -206,7 +206,7 @@ class QbertGame {
         if (entity instanceof Qbert) {
           this.#updateQbert(pos, entity);
         }
-        console.log(pos.toString(), entity.constructor.name, entity);
+        // console.log(pos.toString(), entity.constructor.name, entity);
       }
     })
 
@@ -330,7 +330,7 @@ class QbertGame {
         // is one unit above the tile they are in
         const renderPos = this.proj.projectTo2D(pos.copy().add([0, 0, 1]))
 
-        console.log("renPos", renderPos.toString());
+        // console.log("renPos", renderPos.toString());
         entity.draw(cnv, renderPos)
       }
     })
