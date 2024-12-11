@@ -121,6 +121,7 @@ class Qbert {
         break;
     }
 
+    console.log("VOY", sprite);
     cnv.image(sprite, pos.x, pos.y);
   }
 
@@ -142,19 +143,23 @@ class QbertGame {
    * @param {IsometricProjection} proj
    */
   constructor(proj, spriteSheet) {
+    this.spriteSheet = spriteSheet;
     this.size = 7;
     this.proj = proj;
-    this.#initMap();
+    this.#initMap(spriteSheet);
     this.movement = null;
     this.state = true;
     this.lifes = 0;
     this.qbert = new Qbert(spriteSheet);
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
-    // this.mapState[ceil(random(2, 7))][-1] = 1;
+    // this.mapState[1][1] = 1;
     this.mapState[0][5] = 1;
+    this.mapRender.updatePowers(createVector(-1, 4, 3));
+    this.mapState[5][0] = 1;
+    this.mapRender.updatePowers(createVector(4, -1, 3));
   }
 
-  #initMap() {
+  #initMap(spriteSheet) {
     const size = this.size;
     // this represents the map as a 2d array that includes
     // the border empty spaces
@@ -184,8 +189,8 @@ class QbertGame {
 
     this.tileStates = tileStates;
     this.entities = entities;
-    this.mapRender = new IsometricMap(tiles, proj);
     this.mapState = mapState;
+    this.mapRender = new IsometricMap(tiles, proj, spriteSheet);
   }
 
   #getMapHeight(x, y) {
@@ -197,7 +202,7 @@ class QbertGame {
   }
 
   #verifyPower(x, y) {
-    if (this.mapState[x + 1][y + 1] == 1) {
+    if ((x < 0 || y < 0) && this.mapState[x + 1][y + 1] == 1) {
       return this.size - x - y;
     }
 
@@ -220,6 +225,8 @@ class QbertGame {
     // it's easier to check for collisions vs the O(n^2) alternative of checking
     // for every pair of entities or more complex alternatives.
 
+    this.generatePowers();
+
     this.#mapIter(this.entities, (pos, tileEntities) => {
       for (const entity of tileEntities) {
         if (entity instanceof Qbert) {
@@ -238,19 +245,36 @@ class QbertGame {
         // Remove enemies
         this.state = true;
       }
+      return;
+    }
+    let flag = true;
+    for (let i = 1; i < this.size + 1; i++) {
+      for (let j = 1; j < this.size - i + 1; j++) {
+        if (this.mapState[i][j] == 0) {
+          flag = false;
+          break;
+        }
+      }
+    }
+    if (flag) {
+      console.log("VICTORIA");
+      noLoop();
     }
   }
 
   reset() {
     this.size = 7;
     this.proj = proj;
-    this.#initMap();
+    this.#initMap(this.spriteSheet);
     this.movement = null;
     this.state = true;
     this.lifes = 0;
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
-    // this.mapState[ceil(random(2, 7))][-1] = 1;
-    this.mapState[6][-1] = 1;
+    // this.mapState[1][1] = 1;
+    this.mapState[0][5] = 1;
+    this.mapRender.updatePowers(createVector(-1, 4, 3));
+    this.mapState[5][0] = 1;
+    this.mapRender.updatePowers(createVector(4, -1, 3));
     loop();
   }
 
@@ -303,8 +327,31 @@ class QbertGame {
     if (pos.x < 0 || pos.y < 0) {
       newPos = createVector(0, 0, 0);
     }
-
+    if (newPos.x >= 0 && newPos.y >= 0) {
+      this.mapState[newPos.x + 1][newPos.y + 1] = 1;
+      this.mapRender.visitTile(newPos);
+    }
     this.entities[newPos.x + 1][newPos.y + 1].push(entity);
+  }
+
+  updatePowers(pos) {
+    this.mapState[pos.x + 1][pos.y + 1] = 0;
+    this.mapRender.updatePowers(
+      createVector(pos.x, pos.y, this.size - (pos.y < 0 ? pos.x : pos.y)),
+      false
+    );
+  }
+
+  generatePowers() {
+    if (random() < 0.01 && this.mapRender.powerTiles.length < 2) {
+      const rand = floor(random(2, 6.9));
+      const position =
+        random() < 0.5
+          ? createVector(-1, rand, this.size - rand)
+          : createVector(rand, -1, this.size - rand);
+      this.mapRender.updatePowers(position);
+      this.mapState[position.x + 1][position.y + 1] = 1;
+    }
   }
 
   reportMovement(direction) {
@@ -391,10 +438,16 @@ class QbertGame {
             pos = currPos;
           } else if (entity.state === STATE.IDLE) {
             //Control out of map
+            if (pos.x < 0 || pos.y < 0) {
+              console.log("AAA", pos);
+              console.log("AAA", this.#getMapHeight(pos.x, pos.y));
+              console.log("AAA", this.#verifyPower(pos.x, pos.y));
+            }
             if (
               !this.#getMapHeight(pos.x, pos.y) &&
               !this.#verifyPower(pos.x, pos.y)
             ) {
+              console.log("AAA", pos);
               this.state = false;
               this.lifes = 3;
             }
@@ -406,6 +459,7 @@ class QbertGame {
             }
 
             if (pos.x < 0 || pos.y < 0) {
+              this.updatePowers(pos);
               let newPos1 = pos.copy();
               newPos1.z = this.size - (pos.y < 0 ? newPos1.x : newPos1.y);
               pos = newPos1;

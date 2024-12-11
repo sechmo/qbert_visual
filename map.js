@@ -7,6 +7,10 @@ class Tile {
   constructor(pos, proj) {
     this.pos = pos;
     this.proj = proj;
+    this.visited = false;
+    // if (pos.x == 0 && pos.y == 0) {
+    //   this.visited = true;
+    // }
   }
 
   draw(cnv) {
@@ -29,7 +33,7 @@ class Tile {
     cnv.noStroke();
 
     // top face
-    cnv.fill("green");
+    cnv.fill(this.visited ? "red" : "green");
     const topCorners = [
       pos.copy().add([0, 0, 1]), // ·
       pos.copy().add([1, 0, 1]), // ·, ↘
@@ -60,15 +64,61 @@ class Tile {
   }
 }
 
+class PowerTile extends Tile {
+  /**
+   *
+   * @param {Vector} pos the position of the tile corner towards (-inf,-inf,-inf)
+   * @param {Projection} proj frame of reference used for 2D projection
+   */
+  constructor(pos, proj, sprite) {
+    super(pos, proj);
+    this.sprite = sprite;
+  }
+
+  draw(cnv) {
+    const renderPos = this.proj.projectTo2D(this.pos.copy().add([0, 0, 1]));
+    console.log("renPos", renderPos.toString());
+    cnv.image(this.sprite, renderPos.x, renderPos.y);
+  }
+}
+
 class IsometricMap {
   /**
    *
    * @param {Array<Vector>} tilePos
    * @param {IsometricProjection} proj
    */
-  constructor(tilePos, proj) {
+
+  static sprites = {};
+
+  constructor(tilePos, proj, spriteSheet) {
+    IsometricMap.#loadSprites(spriteSheet);
     this.tiles = tilePos.map((p) => new Tile(p, proj));
+    this.proj = proj;
+    this.powerTiles = [];
     this.#sortTiles();
+  }
+
+  static #loadSprites(spriteSheet) {
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 4; j++) {
+        spriteSheet.addSpec(
+          "power" + (j + i * 4),
+          (j + i * 5) * 16,
+          22 * 16,
+          16,
+          16
+        );
+      }
+    }
+
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 4; j++) {
+        IsometricMap.sprites[j + i * 4] = spriteSheet.getSprite(
+          "power" + (j + i * 4)
+        );
+      }
+    }
   }
 
   #sortTiles() {
@@ -95,9 +145,39 @@ class IsometricMap {
     });
   }
 
+  updatePowers(pos, flag = true) {
+    if (flag) {
+      const spriteIndex = floor(random(32));
+      console.log("AAAA", IsometricMap.sprites[spriteIndex]);
+      this.powerTiles.push(
+        new PowerTile(pos, this.proj, IsometricMap.sprites[spriteIndex])
+      );
+    } else {
+      for (let i = 0; i < this.powerTiles.length; i++) {
+        let position = this.powerTiles[i].pos;
+        if (position.x == pos.x && position.y == pos.y) {
+          this.powerTiles.splice(i, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  visitTile(pos) {
+    for (const tile of this.tiles) {
+      const position = tile.pos;
+      if (pos.x == position.x && pos.y == position.y) {
+        tile.visited = true;
+      }
+    }
+  }
+
   draw(cnv) {
     for (const tile of this.tiles) {
       tile.draw(cnv);
+    }
+    for (const powTile of this.powerTiles) {
+      powTile.draw(cnv);
     }
   }
 }
