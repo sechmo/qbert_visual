@@ -1,25 +1,25 @@
-
 function easeOut(currentTime, startValue, endValue, totalTime) {
-
-  const unitEaseOut = (time) => 1 - pow(1-time,2);
+  const unitEaseOut = (time) => 1 - pow(1 - time, 2);
   // now we scale for our parameters
-  return startValue + (endValue - startValue) * unitEaseOut(currentTime/totalTime)
+  return (
+    startValue + (endValue - startValue) * unitEaseOut(currentTime / totalTime)
+  );
 }
 
 function easeIn(currentTime, startValue, endValue, totalTime) {
-
-  const unitEaseIn = (time) => pow(time,2);
+  const unitEaseIn = (time) => pow(time, 2);
   // now we scale for our parameters
-  return startValue + (endValue - startValue) * unitEaseIn(currentTime/totalTime)
+  return (
+    startValue + (endValue - startValue) * unitEaseIn(currentTime / totalTime)
+  );
 }
-
 
 const DIRECTION = Object.freeze({
   POS_X: "POS_X",
   NEG_X: "NEG_X",
   POS_Y: "POS_Y",
   NEG_Y: "NEG_Y",
-})
+});
 
 function dirToVec(dir) {
   switch (dir) {
@@ -32,19 +32,19 @@ function dirToVec(dir) {
     case DIRECTION.NEG_Y:
       return createVector(0, -1);
     default:
-      throw `invalid DIRECTION "${dir}"`
+      throw `invalid DIRECTION "${dir}"`;
   }
 }
 
 const POSE = Object.freeze({
   UP: "UP",
   DOWN: "DOWN",
-})
+});
 
 const STATE = Object.freeze({
   IDLE: "IDLE",
   JUMPING: "JUMPING",
-})
+});
 class Qbert {
   static sprites = {};
   static spritesLoaded = false;
@@ -86,9 +86,7 @@ class Qbert {
         [POSE.UP]: spriteSheet.getSprite("qbert_up_pos_y"),
         [POSE.DOWN]: spriteSheet.getSprite("qbert_down_pos_y"),
       },
-    }
-
-
+    };
   }
 
   update() {
@@ -100,9 +98,9 @@ class Qbert {
         if (this.frameCount >= 13) {
           this.frameCount = 0;
           this.state = STATE.IDLE;
-          return
+          return;
         }
-        this.frameCount++
+        this.frameCount++;
         return;
     }
   }
@@ -115,7 +113,7 @@ class Qbert {
         break;
       case STATE.JUMPING:
         // first frame of jumpt just face towards the jump direction
-        if (this.frameCount == 1) { 
+        if (this.frameCount == 1) {
           sprite = Qbert.sprites[this.direction][POSE.DOWN];
           break;
         }
@@ -131,52 +129,66 @@ class Qbert {
     this.frameCount = 0;
   }
 
+  reset() {
+    this.frameCount = 0;
+    this.direction = DIRECTION.NEG_X;
+    this.state = STATE.IDLE;
+  }
 }
 
 class QbertGame {
   /**
-   * 
-   * @param {IsometricProjection} proj 
+   *
+   * @param {IsometricProjection} proj
    */
   constructor(proj, spriteSheet) {
     this.size = 7;
     this.proj = proj;
     this.#initMap();
     this.movement = null;
-
-    this.entities[this.zeroPlane.x][this.zeroPlane.y].push(new Qbert(spriteSheet))
+    this.state = true;
+    this.lifes = 0;
+    this.qbert = new Qbert(spriteSheet);
+    this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
+    // this.mapState[ceil(random(2, 7))][-1] = 1;
+    this.mapState[0][5] = 1;
   }
 
   #initMap() {
     const size = this.size;
-    // this represents the map as a 2d array that includes 
+    // this represents the map as a 2d array that includes
     // the border empty spaces
-    this.zeroPlane = createVector(1, 1) // actual coordinates of zero in the array
+    this.zeroPlane = createVector(1, 1); // actual coordinates of zero in the array
     // this represents the tile states / times pressed
     const tileStates = [];
     const tiles = [];
     const entities = [];
+    const mapState = [];
     for (let x = -1; x < size + 1; x++) {
       const stateRow = [];
       const entityRow = [];
+      const mapStateRow = [];
       for (let y = -1; y < size - x + 1; y++) {
-        const z = this.#getMapHeight(x,y);
+        const z = this.#getMapHeight(x, y);
         if (z) {
           tiles.push(createVector(x, y, z));
         }
         stateRow.push(0);
         entityRow.push([]);
+        mapStateRow.push(0);
       }
       tileStates.push(stateRow);
       entities.push(entityRow);
+      mapState.push(mapStateRow);
     }
 
     this.tileStates = tileStates;
     this.entities = entities;
     this.mapRender = new IsometricMap(tiles, proj);
+    this.mapState = mapState;
   }
 
-  #getMapHeight(x,y) {
+  #getMapHeight(x, y) {
     if (x < 0 || x >= this.size || y < 0 || y >= this.size - x) {
       return undefined;
     }
@@ -184,11 +196,19 @@ class QbertGame {
     return this.size - x - y;
   }
 
+  #verifyPower(x, y) {
+    if (this.mapState[x + 1][y + 1] == 1) {
+      return this.size - x - y;
+    }
+
+    return undefined;
+  }
+
   // utility function to ease iterating over one of the maps
   #mapIter(map, func) {
     for (let x = -1; x < this.size + 1; x++) {
       for (let y = -1; y < this.size - x + 1; y++) {
-        const z = this.#getMapHeight(x,y);
+        const z = this.#getMapHeight(x, y);
         func(createVector(x, y, z), map[x + 1][y + 1]);
       }
     }
@@ -196,27 +216,47 @@ class QbertGame {
 
   update() {
     // lets iterate over the entity map and run events for all the entities found.
-    // Note that this is easier than keeping just an entity list since this way 
-    // it's easier to check for collisions vs the O(n^2) alternative of checking 
+    // Note that this is easier than keeping just an entity list since this way
+    // it's easier to check for collisions vs the O(n^2) alternative of checking
     // for every pair of entities or more complex alternatives.
 
     this.#mapIter(this.entities, (pos, tileEntities) => {
       for (const entity of tileEntities) {
-
         if (entity instanceof Qbert) {
           this.#updateQbert(pos, entity);
         }
         console.log(pos.toString(), entity.constructor.name, entity);
       }
-    })
+    });
+  }
 
+  validate() {
+    if (!this.state) {
+      if (this.lifes == 3) {
+        noLoop();
+      } else {
+        // Remove enemies
+        this.state = true;
+      }
+    }
+  }
 
-
+  reset() {
+    this.size = 7;
+    this.proj = proj;
+    this.#initMap();
+    this.movement = null;
+    this.state = true;
+    this.lifes = 0;
+    this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
+    // this.mapState[ceil(random(2, 7))][-1] = 1;
+    this.mapState[6][-1] = 1;
+    loop();
   }
 
   /**
-   * 
-   * @param {Qbert} qbert 
+   *
+   * @param {Qbert} qbert
    */
   #updateQbert(pos, qbert) {
     qbert.update();
@@ -229,7 +269,6 @@ class QbertGame {
         if (qbert.frameCount === 0) {
           // move the entity to the next frame
           this.#moveEntityMap(pos, qbert, qbert.direction);
-          return ;
         }
 
         const mov = this.#getMovement();
@@ -242,29 +281,34 @@ class QbertGame {
   }
 
   #moveEntityMap(pos, entity, direction) {
-    // delete from current position
-    const tileEntities = this.entities[pos.x+1][pos.y+1]
+    const tileEntities = this.entities[pos.x + 1][pos.y + 1];
     let removed = false;
     for (let i = 0; i < tileEntities.length; i++) {
       if (tileEntities[i] === entity) {
-        tileEntities.splice(i,1);
+        tileEntities.splice(i, 1);
         removed = true;
-        break
+        break;
       }
-    } 
+    }
 
     if (!removed) {
-      throw `tried to move entity (${entity}) from ${pos.toString()}, but the entity was not there`
+      throw `tried to move entity (${entity}) from ${pos.toString()}, but the entity was not there`;
     }
 
     // add to new position
 
     const delta = dirToVec(direction);
-    const newPos = pos.copy().add(delta);
-    this.entities[newPos.x + 1][newPos.y +1].push(entity);
+    let newPos = pos.copy().add(delta);
+    //Fix final position power
+    if (pos.x < 0 || pos.y < 0) {
+      newPos = createVector(0, 0, 0);
+    }
+
+    this.entities[newPos.x + 1][newPos.y + 1].push(entity);
   }
+
   reportMovement(direction) {
-    this.movement = direction
+    this.movement = direction;
   }
 
   // returns and "consumes" movement
@@ -274,22 +318,33 @@ class QbertGame {
     return mov;
   }
 
-
   draw(cnv) {
     this.mapRender.draw(cnv);
+    console.log(this.entities);
     this.#mapIter(this.entities, (pos, tileEntities) => {
       for (const entity of tileEntities) {
         if (entity instanceof Qbert) {
           if (entity.state === STATE.JUMPING) {
             // adjust position for jump
             const currentHeight = pos.z;
-            const dirVec = dirToVec(entity.direction)
-            const nextPos = pos.copy().add(dirVec);
-            const nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
+            const dirVec = dirToVec(entity.direction);
+            let nextPos = pos.copy().add(dirVec);
+            let nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
+            let jump = nextHeight - currentHeight;
 
-            const jump = nextHeight - currentHeight;
+            if (pos.x < 0 || pos.y < 0) {
+              nextPos = createVector(0, 0);
+              nextHeight = 0;
+              jump = pos.x < 0 ? pos.y : pos.x;
+            }
 
-            console.log({jumpUp: jump});
+            //Jump to a power
+            if (this.#verifyPower(nextPos.x, nextPos.y)) {
+              nextHeight = currentHeight;
+              jump = 0;
+            }
+
+            console.log({ jumpUp: jump });
 
             let startOff, middleOff, endOff;
             let middleTime, endTime;
@@ -297,7 +352,6 @@ class QbertGame {
             endOff = jump;
             middleTime = 7;
             endTime = 13;
-
 
             if (jump > 0) {
               middleOff = endOff + 0.5;
@@ -309,37 +363,69 @@ class QbertGame {
             let offHeight;
             if (t < middleTime) {
               // ease out (deacceleration) for the jump from start to middle
-              offHeight = easeOut(t,startOff, middleOff, middleTime);
+              offHeight = easeOut(t, startOff, middleOff, middleTime);
             } else {
               // ease in (accelerate) for the jump middle to end
-              offHeight = easeIn(t - middleTime, middleOff, endOff, endTime - middleTime);
+              offHeight = easeIn(
+                t - middleTime,
+                middleOff,
+                endOff,
+                endTime - middleTime
+              );
             }
 
             // linear movement in the jump direction
-            const factOffDir = t/endTime;
-            const offDir = dirVec.copy().mult(factOffDir)
-
-            const currPos = pos.copy().add([0,0,offHeight]).add(offDir);
+            let factOffDir = t / endTime;
+            if (pos.x < 0 || pos.y < 0) {
+              factOffDir *= pos.x < 0 ? pos.y : pos.x;
+              offHeight += 1;
+            }
+            if (pos.x < 0 || pos.y < 0) {
+              let newPos1 = pos.copy();
+              newPos1.z = this.size - (pos.y < 0 ? newPos1.x : newPos1.y);
+              pos = newPos1;
+            }
+            const offDir = dirVec.copy().mult(factOffDir);
+            let currPos = pos.copy().add([0, 0, offHeight]).add(offDir);
             console.log("currPos", currPos.toString());
             pos = currPos;
+          } else if (entity.state === STATE.IDLE) {
+            //Control out of map
+            if (
+              !this.#getMapHeight(pos.x, pos.y) &&
+              !this.#verifyPower(pos.x, pos.y)
+            ) {
+              this.state = false;
+              this.lifes = 3;
+            }
+
+            if (pos.x < 0) {
+              this.reportMovement(DIRECTION.NEG_Y);
+            } else if (pos.y < 0) {
+              this.reportMovement(DIRECTION.NEG_X);
+            }
+
+            if (pos.x < 0 || pos.y < 0) {
+              let newPos1 = pos.copy();
+              newPos1.z = this.size - (pos.y < 0 ? newPos1.x : newPos1.y);
+              pos = newPos1;
+            }
           }
         }
 
-
         // entities are nicely rendered in an ismoetric map if the sprite center
         // is one unit above the tile they are in
-        const renderPos = this.proj.projectTo2D(pos.copy().add([0, 0, 1]))
-
+        const renderPos = this.proj.projectTo2D(pos.copy().add([0, 0, 1]));
         console.log("renPos", renderPos.toString());
-        entity.draw(cnv, renderPos)
+        entity.draw(cnv, renderPos);
       }
-    })
+    });
   }
 }
 
 let spriteSheetImg;
 function preload() {
-  const spriteSheetPath = "sprites.png"
+  const spriteSheetPath = "sprites.png";
   spriteSheetImg = loadImage(spriteSheetPath);
 }
 
@@ -352,7 +438,7 @@ let screenSize;
 let scale;
 let scaledScreenSize;
 function setup() {
-  const tileSize = 16 // px
+  const tileSize = 16; // px
   angleMode(DEGREES);
   const angle = 25; // the angle between the axis (x or y) and the horizontal
   screenSize = createVector(250, 250);
@@ -363,17 +449,19 @@ function setup() {
   createCanvas(scaledScreenSize.x, scaledScreenSize.y);
   frameRate(30);
 
-  buffer = createGraphics(screenSize.x, screenSize.y)
+  buffer = createGraphics(screenSize.x, screenSize.y);
   buffer.imageMode(CENTER);
   buffer.pixelDensity(1);
   noSmooth();
 
   ss = new SpriteSheet(spriteSheetImg);
 
-
-  proj = new IsometricProjection(screenCenter.copy().add(0,50), angle, tileSize);
-  game = new QbertGame(proj, ss);;
-
+  proj = new IsometricProjection(
+    screenCenter.copy().add(0, 50),
+    angle,
+    tileSize
+  );
+  game = new QbertGame(proj, ss);
 
   background(255);
 }
@@ -389,19 +477,22 @@ function draw() {
 
   game.update();
 
-
   buffer.background(1);
   game.draw(buffer);
+
+  game.validate();
   count++;
 
   image(buffer, 0, 0, scaledScreenSize.x, scaledScreenSize.y);
 }
 
-
 let timer = Date.now();
 function keyPressed() {
   if (Date.now() - timer < 500) {
     return;
+  }
+  if (game.lifes === 3 && key == "r") {
+    game.reset();
   }
   timer = Date.now();
   let movement = null;
@@ -420,7 +511,7 @@ function keyPressed() {
       break;
   }
 
-  if (movement) { 
+  if (movement) {
     game.reportMovement(movement);
   }
 }

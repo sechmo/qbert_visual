@@ -1,6 +1,6 @@
 class Tile {
   /**
-   * 
+   *
    * @param {Vector} pos the position of the tile corner towards (-inf,-inf,-inf)
    * @param {Projection} proj frame of reference used for 2D projection
    */
@@ -19,8 +19,7 @@ class Tile {
       // cnv.vertex(v3.x,v3.y);
       // cnv.vertex(v4.x,v4.y);
       // cnv.endShape(CLOSE);
-    }
-
+    };
 
     // each face it's drawn starting
     // from its uppermost corner (in the projection)
@@ -36,8 +35,8 @@ class Tile {
       pos.copy().add([1, 0, 1]), // ·, ↘
       pos.copy().add([1, 1, 1]), // ·, ↘, ↙
       pos.copy().add([0, 1, 1]), // ·, ↙
-    ]
-    vecQuad(...topCorners.map(v => this.proj.projectTo2D(v)));
+    ];
+    vecQuad(...topCorners.map((v) => this.proj.projectTo2D(v)));
 
     // Y face
     cnv.fill("purple");
@@ -46,8 +45,8 @@ class Tile {
       pos.copy().add([1, 1, 0]),
       pos.copy().add([1, 1, 1]),
       pos.copy().add([0, 1, 1]),
-    ]
-    vecQuad(...yCorners.map(v => this.proj.projectTo2D(v)));
+    ];
+    vecQuad(...yCorners.map((v) => this.proj.projectTo2D(v)));
 
     // X face
     cnv.fill("blue");
@@ -56,17 +55,16 @@ class Tile {
       pos.copy().add([1, 1, 0]),
       pos.copy().add([1, 1, 1]),
       pos.copy().add([1, 0, 1]),
-    ]
-    vecQuad(...xCorners.map(v => this.proj.projectTo2D(v)));
-
+    ];
+    vecQuad(...xCorners.map((v) => this.proj.projectTo2D(v)));
   }
 }
 
 class IsometricMap {
   /**
-   * 
-   * @param {Array<Vector>} tilePos 
-   * @param {IsometricProjection} proj 
+   *
+   * @param {Array<Vector>} tilePos
+   * @param {IsometricProjection} proj
    */
   constructor(tilePos, proj) {
     this.tiles = tilePos.map((p) => new Tile(p, proj));
@@ -94,8 +92,7 @@ class IsometricMap {
       if (dy != 0) {
         return dy;
       }
-
-    })
+    });
   }
 
   draw(cnv) {
