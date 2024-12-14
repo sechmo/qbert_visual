@@ -149,7 +149,7 @@ class QbertGame {
     this.proj = proj;
     this.#initMap(spriteSheet);
     this.movement = null;
-    this.state = true;
+    this.gameOver = true;
     this.fall = true;
     this.lifes = 0;
     this.qbert = new Qbert(spriteSheet);
@@ -246,42 +246,37 @@ class QbertGame {
   }
 
   validate() {
-    let qbertPos;
     this.#mapIter(this.entities, (pos, tileEntities) => {
+      let hasQbert = false;
+      let hasEnemies = false;
       for (const entity of tileEntities) {
-        if (entity instanceof Qbert) {
-          qbertPos = pos;
-        }
+        hasQbert = hasQbert || (entity instanceof Qbert);
+        hasEnemies = hasQbert || (!(entity instanceof Qbert) && entity.state == STATE.IDLE);
       }
+
+      this.gameOver = this.gameOver || (hasQbert && hasEnemies);
+
     });
 
-    for (const enemy of this.entities[qbertPos.x + 1][qbertPos.y + 1]) {
-      if (!(enemy instanceof Qbert) && enemy.frameCount < 5) {
-        this.state = false;
+    let victory = true;
+    this.#mapIter(this.mapState,
+      (pos, tileState) => {
+        victory = victory &&
+        (this.#getMapHeight(pos.x, pos.y) === undefined || tileState == 1)
       }
-    }
+    )
 
-    let flag = true;
-    console.log("ESTADO", this.mapState);
-    for (let i = 1; i < this.size + 1; i++) {
-      for (let j = 1; j < this.size - i + 2; j++) {
-        if (this.mapState[i][j] == 0) {
-          flag = false;
-          break;
-        }
-      }
-    }
-    if (flag) {
+    if (victory) {
       console.log("VICTORIA");
       noLoop();
     }
 
-    if (!this.state || !this.fall) {
+    if (!this.gameOver || !this.fall) {
       if (this.lifes == 3 || !this.fall) {
         noLoop();
       } else {
         this.removeEnemies();
-        this.state = true;
+        this.gameOver = true;
         this.lifes += 1;
       }
       return;
@@ -307,7 +302,7 @@ class QbertGame {
     this.proj = proj;
     this.#initMap(this.spriteSheet);
     this.movement = null;
-    this.state = true;
+    this.gameOver = true;
     this.fall = true;
     this.lifes = 0;
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
@@ -527,6 +522,7 @@ class QbertGame {
             let jump = nextHeight - currentHeight;
 
             if (pos.x < 0 || pos.y < 0) {
+              console.log("got here");
               nextPos = createVector(0, 0);
               nextHeight = 0;
               jump = pos.x < 0 ? pos.y : pos.x;
@@ -656,7 +652,6 @@ class QbertGame {
         // entities are nicely rendered in an ismoetric map if the sprite center
         // is one unit above the tile they are in
         const renderPos = this.proj.projectTo2D(pos.copy().add([0, 0, 1]));
-        console.log("renPos", renderPos.toString());
         entity.draw(cnv, renderPos);
       }
     });

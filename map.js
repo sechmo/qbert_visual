@@ -77,7 +77,7 @@ class PowerTile extends Tile {
 
   draw(cnv) {
     const renderPos = this.proj.projectTo2D(this.pos.copy().add([0, 0, 1]));
-    console.log("renPos", renderPos.toString());
+    // console.log("renPos", renderPos.toString());
     cnv.image(this.sprite, renderPos.x, renderPos.y);
   }
 }
