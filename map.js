@@ -62,6 +62,10 @@ class Tile {
     ];
     vecQuad(...xCorners.map((v) => this.proj.projectTo2D(v)));
   }
+
+  getPosition() {
+    return this.pos.copy();
+  }
 }
 
 class PowerTile extends Tile {
@@ -77,7 +81,7 @@ class PowerTile extends Tile {
 
   draw(cnv) {
     const renderPos = this.proj.projectTo2D(this.pos.copy().add([0, 0, 1]));
-    // console.log("renPos", renderPos.toString());
+    // // console.log("renPos", renderPos.toString());
     cnv.image(this.sprite, renderPos.x, renderPos.y);
   }
 }
@@ -148,7 +152,7 @@ class IsometricMap {
   updatePowers(pos, flag = true) {
     if (flag) {
       const spriteIndex = floor(random(32));
-      console.log("AAAA", IsometricMap.sprites[spriteIndex]);
+      // console.log("AAAA", IsometricMap.sprites[spriteIndex]);
       this.powerTiles.push(
         new PowerTile(pos, this.proj, IsometricMap.sprites[spriteIndex])
       );
@@ -172,12 +176,8 @@ class IsometricMap {
     }
   }
 
-  draw(cnv) {
-    for (const tile of this.tiles) {
-      tile.draw(cnv);
-    }
-    for (const powTile of this.powerTiles) {
-      powTile.draw(cnv);
-    }
+  getTiles() {
+    return [...this.tiles, ...this.powerTiles];
   }
 }
+

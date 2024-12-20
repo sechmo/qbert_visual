@@ -122,7 +122,7 @@ class Qbert {
         break;
     }
 
-    console.log("VOY", sprite);
+    // console.log("VOY", sprite);
     cnv.image(sprite, pos.x, pos.y);
   }
 
@@ -156,9 +156,9 @@ class QbertGame {
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
     // this.mapState[1][1] = 1;
     this.mapState[0][5] = 1;
-    this.mapRender.updatePowers(createVector(-1, 4, 3));
+    this.tileMap.updatePowers(createVector(-1, 4, 3));
     this.mapState[5][0] = 1;
-    this.mapRender.updatePowers(createVector(4, -1, 3));
+    this.tileMap.updatePowers(createVector(4, -1, 3));
   }
 
   #initMap(spriteSheet) {
@@ -192,7 +192,8 @@ class QbertGame {
     this.tileStates = tileStates;
     this.entities = entities;
     this.mapState = mapState;
-    this.mapRender = new IsometricMap(tiles, proj, spriteSheet);
+    this.tileMap = new IsometricMap(tiles, proj, spriteSheet);
+    this.isoRender = new IsometricRender(proj);
   }
 
   #getMapHeight(x, y) {
@@ -240,7 +241,7 @@ class QbertGame {
         } else if (entity instanceof Enemy) {
           this.#updateEnemy(pos, entity);
         }
-        console.log(pos.toString(), entity.constructor.name, entity);
+        // console.log(pos.toString(), entity.constructor.name, entity);
       }
     });
   }
@@ -267,7 +268,7 @@ class QbertGame {
     )
 
     if (victory) {
-      console.log("VICTORIA");
+      // console.log("VICTORIA");
       noLoop();
     }
 
@@ -291,7 +292,7 @@ class QbertGame {
           tileEntities[i] instanceof Snake
         ) {
           tileEntities.splice(i, 1);
-          console.log(pos.toString());
+          // console.log(pos.toString());
         }
       }
     });
@@ -308,9 +309,9 @@ class QbertGame {
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
     // this.mapState[1][1] = 1;
     this.mapState[0][5] = 1;
-    this.mapRender.updatePowers(createVector(-1, 4, 3));
+    this.tileMap.updatePowers(createVector(-1, 4, 3));
     this.mapState[5][0] = 1;
-    this.mapRender.updatePowers(createVector(4, -1, 3));
+    this.tileMap.updatePowers(createVector(4, -1, 3));
     loop();
   }
 
@@ -359,7 +360,7 @@ class QbertGame {
           for (const entity of tileEntities) {
             if (entity instanceof Qbert) {
               posQbert = posIt;
-              console.log("POSICION_QBERT", posIt);
+              // console.log("POSICION_QBERT", posIt);
               break;
             }
           }
@@ -437,7 +438,7 @@ class QbertGame {
       }
       if (newPos.x >= 0 && newPos.y >= 0) {
         this.mapState[newPos.x + 1][newPos.y + 1] = 1;
-        this.mapRender.visitTile(newPos);
+        this.tileMap.visitTile(newPos);
       }
       this.entities[newPos.x + 1][newPos.y + 1].push(entity);
     } else {
@@ -454,20 +455,20 @@ class QbertGame {
 
   updatePowers(pos) {
     this.mapState[pos.x + 1][pos.y + 1] = 0;
-    this.mapRender.updatePowers(
+    this.tileMap.updatePowers(
       createVector(pos.x, pos.y, this.size - (pos.y < 0 ? pos.x : pos.y)),
       false
     );
   }
 
   generatePowers() {
-    if (random() < 0.01 && this.mapRender.powerTiles.length < 2) {
+    if (random() < 0.01 && this.tileMap.powerTiles.length < 2) {
       const rand = floor(random(2, 6.9));
       const position =
         random() < 0.5
           ? createVector(-1, rand, this.size - rand)
           : createVector(rand, -1, this.size - rand);
-      this.mapRender.updatePowers(position);
+      this.tileMap.updatePowers(position);
       this.mapState[position.x + 1][position.y + 1] = 1;
     }
   }
@@ -508,8 +509,9 @@ class QbertGame {
   }
 
   draw(cnv) {
-    this.mapRender.draw(cnv);
-    console.log(this.entities);
+    // this.tileMap.draw(cnv);
+    this.isoRender.draw(cnv, this.tileMap.getTiles());
+    // console.log(this.entities);
     this.#mapIter(this.entities, (pos, tileEntities) => {
       for (const entity of tileEntities) {
         if (entity instanceof Qbert) {
@@ -522,7 +524,7 @@ class QbertGame {
             let jump = nextHeight - currentHeight;
 
             if (pos.x < 0 || pos.y < 0) {
-              console.log("got here");
+              // console.log("got here");
               nextPos = createVector(0, 0);
               nextHeight = 0;
               jump = pos.x < 0 ? pos.y : pos.x;
@@ -534,7 +536,7 @@ class QbertGame {
               jump = 0;
             }
 
-            console.log({ jumpUp: jump });
+            // console.log({ jumpUp: jump });
 
             let startOff, middleOff, endOff;
             let middleTime, endTime;
@@ -577,7 +579,7 @@ class QbertGame {
             }
             const offDir = dirVec.copy().mult(factOffDir);
             let currPos = pos.copy().add([0, 0, offHeight]).add(offDir);
-            console.log("currPos", currPos.toString());
+            // console.log("currPos", currPos.toString());
             pos = currPos;
           } else if (entity.state === STATE.IDLE) {
             //Control out of map
@@ -610,7 +612,7 @@ class QbertGame {
             const nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
             const jump = nextHeight - currentHeight;
 
-            console.log({ jumpUp: jump });
+            // console.log({ jumpUp: jump });
 
             let startOff, middleOff, endOff;
             let middleTime, endTime;
@@ -644,7 +646,7 @@ class QbertGame {
             const factOffDir = t / endTime;
             const offDir = dirVec.copy().mult(factOffDir);
             const currPos = pos.copy().add([0, 0, offHeight]).add(offDir);
-            console.log("currPos", currPos.toString());
+            // console.log("currPos", currPos.toString());
             pos = currPos;
           }
         }
@@ -678,7 +680,7 @@ function setup() {
   const angle = 25; // the angle between the axis (x or y) and the horizontal
   screenSize = createVector(250, 250);
   const screenCenter = screenSize.copy().mult(0.5);
-  scale = 4;
+  scale = 2.4;
   scaledScreenSize = screenSize.copy().mult(scale);
 
   createCanvas(scaledScreenSize.x, scaledScreenSize.y);
