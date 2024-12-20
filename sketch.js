@@ -36,6 +36,19 @@ function dirToVec(dir) {
   }
 }
 
+function invDir(dir) {
+  switch (dir) {
+    case DIRECTION.POS_X:
+      return DIRECTION.NEG_X;
+    case DIRECTION.NEG_X:
+      return DIRECTION.POS_X;
+    case DIRECTION.POS_Y:
+      return DIRECTION.NEG_Y;
+    case DIRECTION.NEG_Y:
+      return DIRECTION.POS_Y;
+  }
+}
+
 const POSE = Object.freeze({
   UP: "UP",
   DOWN: "DOWN",
@@ -44,6 +57,7 @@ const POSE = Object.freeze({
 const STATE = Object.freeze({
   IDLE: "IDLE",
   JUMPING: "JUMPING",
+  FALLING: "FALLING",
 });
 
 class Qbert {
@@ -103,6 +117,9 @@ class Qbert {
         }
         this.frameCount++;
         return;
+      case STATE.FALLING:
+        this.frameCount++;
+        return;
     }
   }
 
@@ -120,6 +137,9 @@ class Qbert {
         }
         sprite = Qbert.sprites[this.direction][POSE.UP];
         break;
+      case STATE.FALLING:
+        sprite = Qbert.sprites[this.direction][POSE.UP];
+        break;
     }
 
     // console.log("VOY", sprite);
@@ -128,6 +148,11 @@ class Qbert {
 
   startJump() {
     this.state = STATE.JUMPING;
+    this.frameCount = 0;
+  }
+
+  startFall() {
+    this.state = STATE.FALLING;
     this.frameCount = 0;
   }
 
@@ -149,9 +174,10 @@ class QbertGame {
     this.proj = proj;
     this.#initMap(spriteSheet);
     this.movement = null;
-    this.gameOver = true;
+    this.deadQbert = false;
+    this.gameOver = false;
     this.fall = true;
-    this.lifes = 0;
+    this.lifes = 3;
     this.qbert = new Qbert(spriteSheet);
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
     // this.mapState[1][1] = 1;
@@ -159,6 +185,8 @@ class QbertGame {
     this.tileMap.updatePowers(createVector(-1, 4, 3));
     this.mapState[5][0] = 1;
     this.tileMap.updatePowers(createVector(4, -1, 3));
+    this.gravity = 0.025;
+    this.tick = 0;
   }
 
   #initMap(spriteSheet) {
@@ -244,18 +272,30 @@ class QbertGame {
         // console.log(pos.toString(), entity.constructor.name, entity);
       }
     });
+
+    if (!this.deadQbert) {
+      this.validate();
+    }
+
+    this.tick++;
   }
 
   validate() {
+    this.deadQbert = false;
     this.#mapIter(this.entities, (pos, tileEntities) => {
       let hasQbert = false;
       let hasEnemies = false;
+      let qbertFalling = false;
       for (const entity of tileEntities) {
-        hasQbert = hasQbert || (entity instanceof Qbert);
-        hasEnemies = hasQbert || (!(entity instanceof Qbert) && entity.state == STATE.IDLE);
+        hasQbert = hasQbert || (entity instanceof Qbert && entity.state === STATE.IDLE);
+        if (entity instanceof Qbert) {
+          qbertFalling = entity.state === STATE.FALLING;
+        }
+        hasEnemies = hasEnemies || (!(entity instanceof Qbert) && entity.state == STATE.IDLE);
       }
 
-      this.gameOver = this.gameOver || (hasQbert && hasEnemies);
+
+      this.deadQbert = this.deadQbert || (hasQbert && hasEnemies) || qbertFalling;
 
     });
 
@@ -263,25 +303,34 @@ class QbertGame {
     this.#mapIter(this.mapState,
       (pos, tileState) => {
         victory = victory &&
-        (this.#getMapHeight(pos.x, pos.y) === undefined || tileState == 1)
+          (this.#getMapHeight(pos.x, pos.y) === undefined || tileState == 1)
       }
     )
 
     if (victory) {
-      // console.log("VICTORIA");
+      console.log("VICTORIA");
       noLoop();
     }
 
-    if (!this.gameOver || !this.fall) {
-      if (this.lifes == 3 || !this.fall) {
-        noLoop();
-      } else {
-        this.removeEnemies();
-        this.gameOver = true;
-        this.lifes += 1;
-      }
-      return;
+    if (this.deadQbert) {
+      console.log("GAME OVER");
+      this.lifes--;
     }
+
+    if (this.lifes == 0) {
+      this.gameOver = true;
+    }
+
+    if (!this.deadQbert || !this.fall) {
+      // if (this.lifes == 3 || !this.fall) {
+      //   noLoop();
+      // } else {
+      //   this.removeEnemies();
+      //   this.gameOver = true;
+      //   this.lifes += 1;
+      // }
+      // return;
+    } 
   }
 
   removeEnemies() {
@@ -303,15 +352,18 @@ class QbertGame {
     this.proj = proj;
     this.#initMap(this.spriteSheet);
     this.movement = null;
-    this.gameOver = true;
+    this.deadQbert = false;
+    this.gameOver = false;
     this.fall = true;
-    this.lifes = 0;
+    this.lifes = 3;
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
     // this.mapState[1][1] = 1;
     this.mapState[0][5] = 1;
     this.tileMap.updatePowers(createVector(-1, 4, 3));
     this.mapState[5][0] = 1;
     this.tileMap.updatePowers(createVector(4, -1, 3));
+    this.tick = 0;
+
     loop();
   }
 
@@ -328,8 +380,18 @@ class QbertGame {
       case STATE.IDLE:
         // just finished jumping
         if (qbert.frameCount === 0) {
-          // move the entity to the next frame
-          this.#moveEntityMap(pos, qbert, qbert.direction);
+          // move the entity to the next tile
+          const newPos = this.#moveEntityMap(pos, qbert, qbert.direction);
+          // check if it is falling 
+
+          const newPosHeight = this.#getMapHeight(newPos.x, newPos.y);
+
+          if (newPosHeight === undefined) {
+            qbert.startFall();
+            return;
+          }
+
+
         }
 
         const mov = this.#getMovement();
@@ -451,6 +513,8 @@ class QbertGame {
         this.entities[newPos.x + 1][newPos.y + 1].push(entity);
       }
     }
+
+    return newPos;
   }
 
   updatePowers(pos) {
@@ -474,6 +538,9 @@ class QbertGame {
   }
 
   generateEnemies() {
+    if (this.tick < 200) {
+      return
+    };
     if (random() < 0.007) {
       let index, pos;
       while (true) {
@@ -508,155 +575,205 @@ class QbertGame {
     return mov;
   }
 
+
+  /**
+   * Calculates the position of qbert accounting for jump and animation progress
+   * @param {mapPos}  
+   * @param {Qbert} qbert 
+   */
+  #qbertProjPos(mapPos, qbert) {
+    // this should be in the qbert class
+    let currPos;
+    if (qbert.state === STATE.JUMPING) {
+      // adjust position for jump
+      const currentHeight = mapPos.z;
+      const dirVec = dirToVec(qbert.direction);
+      let nextPos = mapPos.copy().add(dirVec);
+      let nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
+      let jump = nextHeight - currentHeight;
+
+      if (mapPos.x < 0 || mapPos.y < 0) {
+        // console.log("got here");
+        nextPos = createVector(0, 0);
+        nextHeight = 0;
+        jump = mapPos.x < 0 ? mapPos.y : mapPos.x;
+      }
+
+      //Jump to a power
+      if (this.#verifyPower(nextPos.x, nextPos.y)) {
+        nextHeight = currentHeight;
+        jump = 0;
+      }
+
+      // console.log({ jumpUp: jump });
+
+      let startOff, middleOff, endOff;
+      let middleTime, endTime;
+      startOff = 0;
+      endOff = jump;
+      middleTime = 7;
+      endTime = 13;
+
+      if (jump > 0) {
+        middleOff = endOff + 0.5;
+      } else {
+        middleOff = startOff + 0.5;
+      }
+
+      const t = qbert.frameCount;
+      let offHeight;
+      if (t < middleTime) {
+        // ease out (deacceleration) for the jump from start to middle
+        offHeight = easeOut(t, startOff, middleOff, middleTime);
+      } else {
+        // ease in (accelerate) for the jump middle to end
+        offHeight = easeIn(
+          t - middleTime,
+          middleOff,
+          endOff,
+          endTime - middleTime
+        );
+      }
+
+      // linear movement in the jump direction
+      let factOffDir = t / endTime;
+      if (mapPos.x < 0 || mapPos.y < 0) {
+        factOffDir *= mapPos.x < 0 ? mapPos.y : mapPos.x;
+        offHeight += 1;
+      }
+      if (mapPos.x < 0 || mapPos.y < 0) {
+        let newPos1 = mapPos.copy();
+        newPos1.z = this.size - (mapPos.y < 0 ? newPos1.x : newPos1.y);
+        mapPos = newPos1;
+      }
+      const offDir = dirVec.copy().mult(factOffDir);
+      currPos = mapPos.copy().add([0, 0, offHeight]).add(offDir);
+      // console.log("currPos", currPos.toString());
+
+    } else if (qbert.state === STATE.IDLE) {
+      //Control out of map
+      if (
+        !this.#getMapHeight(mapPos.x, mapPos.y) &&
+        !this.#verifyPower(mapPos.x, mapPos.y)
+      ) {
+        this.fall = false;
+      }
+
+      // if (mapPos.x < 0) {
+      //   this.reportMovement(DIRECTION.NEG_Y);
+      // } else if (mapPos.y < 0) {
+      //   this.reportMovement(DIRECTION.NEG_X);
+      // }
+
+      currPos = mapPos
+
+      if (mapPos.x < 0 || mapPos.y < 0) {
+        this.updatePowers(mapPos);
+        let newPos1 = mapPos.copy();
+        newPos1.z = this.size - (mapPos.y < 0 ? newPos1.x : newPos1.y);
+        currPos = newPos1;
+      }
+
+    } else if (qbert.state === STATE.FALLING) {
+
+      const previousPos = mapPos.copy().add(dirToVec(invDir(qbert.direction)))
+
+      const previousHeight = this.#getMapHeight(previousPos.x,previousPos.y); // this should not be undefined
+
+      // falling 
+      const t = qbert.frameCount;
+      const height = previousHeight - this.gravity * t * t;
+
+      currPos = createVector(mapPos.x,mapPos.y, height);
+
+      
+
+
+    }
+
+
+
+    // entities are nicely rendered in an ismoetric map if the sprite center
+    // is one unit above the tile they are in
+    return currPos.copy().add([0, 0, 1]);
+
+  }
+
+
+  #entityProjPos(mapPos, entity) {
+    // this should be implemented in each entity
+    let currPos;
+    if (entity.state === STATE.JUMPING) {
+      // adjust position for jump
+      const currentHeight = mapPos.z;
+      const dirVec = dirToVec(entity.direction);
+      const nextPos = mapPos.copy().add(dirVec);
+      const nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
+      const jump = nextHeight - currentHeight;
+
+      // console.log({ jumpUp: jump });
+
+      let startOff, middleOff, endOff;
+      let middleTime, endTime;
+      startOff = 0;
+      endOff = jump;
+      middleTime = 10;
+      endTime = 20;
+
+      if (jump > 0) {
+        middleOff = endOff + 0.5;
+      } else {
+        middleOff = startOff + 0.5;
+      }
+
+      const t = entity.frameCount;
+      let offHeight;
+      if (t < middleTime) {
+        // ease out (deacceleration) for the jump from start to middle
+        offHeight = easeOut(t, startOff, middleOff, middleTime);
+      } else {
+        // ease in (accelerate) for the jump middle to end
+        offHeight = easeIn(
+          t - middleTime,
+          middleOff,
+          endOff,
+          endTime - middleTime
+        );
+      }
+
+      // linear movement in the jump direction
+      const factOffDir = t / endTime;
+      const offDir = dirVec.copy().mult(factOffDir);
+      currPos = mapPos.copy().add([0, 0, offHeight]).add(offDir);
+    }
+
+    // entities are nicely rendered in an ismoetric map if the sprite center
+    // is one unit above the tile they are in
+    return currPos.copy().add([0, 0, 1]);
+
+  }
+
   draw(cnv) {
     // this.tileMap.draw(cnv);
-    this.isoRender.draw(cnv, this.tileMap.getTiles());
+
+    const entities = [];
+
+    entities.push(...this.tileMap.getTiles().map(t => [t.getPosition(), t]));
+
+
     // console.log(this.entities);
     this.#mapIter(this.entities, (pos, tileEntities) => {
       for (const entity of tileEntities) {
         if (entity instanceof Qbert) {
-          if (entity.state === STATE.JUMPING) {
-            // adjust position for jump
-            const currentHeight = pos.z;
-            const dirVec = dirToVec(entity.direction);
-            let nextPos = pos.copy().add(dirVec);
-            let nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
-            let jump = nextHeight - currentHeight;
-
-            if (pos.x < 0 || pos.y < 0) {
-              // console.log("got here");
-              nextPos = createVector(0, 0);
-              nextHeight = 0;
-              jump = pos.x < 0 ? pos.y : pos.x;
-            }
-
-            //Jump to a power
-            if (this.#verifyPower(nextPos.x, nextPos.y)) {
-              nextHeight = currentHeight;
-              jump = 0;
-            }
-
-            // console.log({ jumpUp: jump });
-
-            let startOff, middleOff, endOff;
-            let middleTime, endTime;
-            startOff = 0;
-            endOff = jump;
-            middleTime = 7;
-            endTime = 13;
-
-            if (jump > 0) {
-              middleOff = endOff + 0.5;
-            } else {
-              middleOff = startOff + 0.5;
-            }
-
-            const t = entity.frameCount;
-            let offHeight;
-            if (t < middleTime) {
-              // ease out (deacceleration) for the jump from start to middle
-              offHeight = easeOut(t, startOff, middleOff, middleTime);
-            } else {
-              // ease in (accelerate) for the jump middle to end
-              offHeight = easeIn(
-                t - middleTime,
-                middleOff,
-                endOff,
-                endTime - middleTime
-              );
-            }
-
-            // linear movement in the jump direction
-            let factOffDir = t / endTime;
-            if (pos.x < 0 || pos.y < 0) {
-              factOffDir *= pos.x < 0 ? pos.y : pos.x;
-              offHeight += 1;
-            }
-            if (pos.x < 0 || pos.y < 0) {
-              let newPos1 = pos.copy();
-              newPos1.z = this.size - (pos.y < 0 ? newPos1.x : newPos1.y);
-              pos = newPos1;
-            }
-            const offDir = dirVec.copy().mult(factOffDir);
-            let currPos = pos.copy().add([0, 0, offHeight]).add(offDir);
-            // console.log("currPos", currPos.toString());
-            pos = currPos;
-          } else if (entity.state === STATE.IDLE) {
-            //Control out of map
-            if (
-              !this.#getMapHeight(pos.x, pos.y) &&
-              !this.#verifyPower(pos.x, pos.y)
-            ) {
-              this.fall = false;
-            }
-
-            if (pos.x < 0) {
-              this.reportMovement(DIRECTION.NEG_Y);
-            } else if (pos.y < 0) {
-              this.reportMovement(DIRECTION.NEG_X);
-            }
-
-            if (pos.x < 0 || pos.y < 0) {
-              this.updatePowers(pos);
-              let newPos1 = pos.copy();
-              newPos1.z = this.size - (pos.y < 0 ? newPos1.x : newPos1.y);
-              pos = newPos1;
-            }
-          }
+          entities.push([this.#qbertProjPos(pos, entity), entity])
         } else {
-          if (entity.state === STATE.JUMPING) {
-            // adjust position for jump
-            const currentHeight = pos.z;
-            const dirVec = dirToVec(entity.direction);
-            const nextPos = pos.copy().add(dirVec);
-            const nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
-            const jump = nextHeight - currentHeight;
-
-            // console.log({ jumpUp: jump });
-
-            let startOff, middleOff, endOff;
-            let middleTime, endTime;
-            startOff = 0;
-            endOff = jump;
-            middleTime = 10;
-            endTime = 20;
-
-            if (jump > 0) {
-              middleOff = endOff + 0.5;
-            } else {
-              middleOff = startOff + 0.5;
-            }
-
-            const t = entity.frameCount;
-            let offHeight;
-            if (t < middleTime) {
-              // ease out (deacceleration) for the jump from start to middle
-              offHeight = easeOut(t, startOff, middleOff, middleTime);
-            } else {
-              // ease in (accelerate) for the jump middle to end
-              offHeight = easeIn(
-                t - middleTime,
-                middleOff,
-                endOff,
-                endTime - middleTime
-              );
-            }
-
-            // linear movement in the jump direction
-            const factOffDir = t / endTime;
-            const offDir = dirVec.copy().mult(factOffDir);
-            const currPos = pos.copy().add([0, 0, offHeight]).add(offDir);
-            // console.log("currPos", currPos.toString());
-            pos = currPos;
-          }
+          entities.push([this.#entityProjPos(pos, entity), entity])
         }
-
-        // entities are nicely rendered in an ismoetric map if the sprite center
-        // is one unit above the tile they are in
-        const renderPos = this.proj.projectTo2D(pos.copy().add([0, 0, 1]));
-        entity.draw(cnv, renderPos);
       }
     });
+
+
+    this.isoRender.draw(cnv, entities);
   }
 }
 
@@ -717,7 +834,6 @@ function draw() {
   buffer.background(1);
   game.draw(buffer);
 
-  game.validate();
   count++;
 
   image(buffer, 0, 0, scaledScreenSize.x, scaledScreenSize.y);

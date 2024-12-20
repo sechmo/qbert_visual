@@ -61,15 +61,15 @@ class IsometricRender {
 
   draw(cnv, elements) {
 
-    const sortedElements = elements.toSorted((e1, e2) => {
+    const sortedElements = elements.toSorted(([pos1, e1], [pos2, e2]) => {
       /*
         for appropiate rendering of the tiles 
         lets order them first by height, lower first,
         then x and y, also lower first
       */
 
-      const pos1 = e1.getPosition();
-      const pos2 = e2.getPosition();
+      // const pos1 = e1.getPosition();
+      // const pos2 = e2.getPosition();
 
       const dz = pos1.z - pos2.z;
       if (dz != 0) {
@@ -87,8 +87,8 @@ class IsometricRender {
       }
     })
 
-    sortedElements.forEach(e => {
-      const renderPos = this.proj.projectTo2D(e.getPosition());
+    sortedElements.forEach(([pos, e]) => {
+      const renderPos = this.proj.projectTo2D(pos);
       e.draw(cnv,renderPos);
     });
 
