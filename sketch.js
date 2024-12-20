@@ -58,6 +58,7 @@ const STATE = Object.freeze({
   IDLE: "IDLE",
   JUMPING: "JUMPING",
   FALLING: "FALLING",
+  DYING: "DYING",
 });
 
 class Qbert {
@@ -83,6 +84,7 @@ class Qbert {
     spriteSheet.addSpec("qbert_up_pos_x", 80, 0, 16, 16);
     spriteSheet.addSpec("qbert_down_pos_y", 96, 0, 16, 16);
     spriteSheet.addSpec("qbert_up_pos_y", 112, 0, 16, 16);
+    spriteSheet.addSpec("qbert_text_bubble", 16*8,16*5, 16*3, 16*2);
 
     Qbert.sprites = {
       [DIRECTION.NEG_X]: {
@@ -102,13 +104,11 @@ class Qbert {
         [POSE.DOWN]: spriteSheet.getSprite("qbert_down_pos_y"),
       },
     };
+    Qbert.bubbleSprite = spriteSheet.getSprite("qbert_text_bubble");
   }
 
   update() {
     switch (this.state) {
-      case STATE.IDLE:
-        this.frameCount++;
-        return;
       case STATE.JUMPING:
         if (this.frameCount >= 13) {
           this.frameCount = 0;
@@ -117,7 +117,7 @@ class Qbert {
         }
         this.frameCount++;
         return;
-      case STATE.FALLING:
+      default:
         this.frameCount++;
         return;
     }
@@ -125,6 +125,7 @@ class Qbert {
 
   draw(cnv, pos) {
     let sprite;
+    let bubble = null;
     switch (this.state) {
       case STATE.IDLE:
         sprite = Qbert.sprites[this.direction][POSE.DOWN];
@@ -140,10 +141,17 @@ class Qbert {
       case STATE.FALLING:
         sprite = Qbert.sprites[this.direction][POSE.UP];
         break;
+      case STATE.DYING:
+        sprite = Qbert.sprites[this.direction][POSE.DOWN];
+        bubble = Qbert.bubbleSprite;
+        break;
     }
 
     // console.log("VOY", sprite);
     cnv.image(sprite, pos.x, pos.y);
+    if (bubble) {
+      cnv.image(bubble, pos.x, pos.y - 16);
+    }
   }
 
   startJump() {
@@ -156,10 +164,14 @@ class Qbert {
     this.frameCount = 0;
   }
 
-  reset() {
+  startDying() {
+    this.state = STATE.DYING;
     this.frameCount = 0;
-    this.direction = DIRECTION.NEG_X;
+  }
+
+  startIdle() {
     this.state = STATE.IDLE;
+    this.frameCount = 0;
   }
 }
 
@@ -174,7 +186,10 @@ class QbertGame {
     this.proj = proj;
     this.#initMap(spriteSheet);
     this.movement = null;
+    this.tick = 0;
+    this.graceTime = 70; // ticks
     this.deadQbert = false;
+    this.deathTick = null;
     this.gameOver = false;
     this.fall = true;
     this.lifes = 3;
@@ -186,7 +201,21 @@ class QbertGame {
     this.mapState[5][0] = 1;
     this.tileMap.updatePowers(createVector(4, -1, 3));
     this.gravity = 0.025;
-    this.tick = 0;
+
+    QbertGame.#loadSprites(spriteSheet);
+  }
+
+  static spritesLoaded = false
+  static sprites = {}
+
+  static #loadSprites(spriteSheet) {
+    if (this.spritesLoaded) {
+      return;
+    }
+
+    this.spritesLoaded = true;
+    spriteSheet.addSpec("qbert_game_life", 16*14, 16*2, 8, 16);
+    this.sprites["LIFE"] = spriteSheet.getSprite("qbert_game_life");
   }
 
   #initMap(spriteSheet) {
@@ -255,10 +284,15 @@ class QbertGame {
     // Note that this is easier than keeping just an entity list since this way
     // it's easier to check for collisions vs the O(n^2) alternative of checking
     // for every pair of entities or more complex alternatives.
+    if (this.gameOver) {
+      return;
+    }
 
     this.generatePowers();
 
-    this.generateEnemies();
+    if (this.tick >= this.graceTime) {
+      this.generateEnemies();
+    };
 
     this.#mapIter(this.entities, (pos, tileEntities) => {
       for (const entity of tileEntities) {
@@ -276,6 +310,7 @@ class QbertGame {
     if (!this.deadQbert) {
       this.validate();
     }
+
 
     this.tick++;
   }
@@ -313,11 +348,12 @@ class QbertGame {
     }
 
     if (this.deadQbert) {
-      console.log("GAME OVER");
       this.lifes--;
+      this.deathTick = this.tick;
     }
 
     if (this.lifes == 0) {
+      console.log("GAME OVER");
       this.gameOver = true;
     }
 
@@ -347,25 +383,6 @@ class QbertGame {
     });
   }
 
-  reset() {
-    this.size = 7;
-    this.proj = proj;
-    this.#initMap(this.spriteSheet);
-    this.movement = null;
-    this.deadQbert = false;
-    this.gameOver = false;
-    this.fall = true;
-    this.lifes = 3;
-    this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
-    // this.mapState[1][1] = 1;
-    this.mapState[0][5] = 1;
-    this.tileMap.updatePowers(createVector(-1, 4, 3));
-    this.mapState[5][0] = 1;
-    this.tileMap.updatePowers(createVector(4, -1, 3));
-    this.tick = 0;
-
-    loop();
-  }
 
   /**
    *
@@ -383,7 +400,6 @@ class QbertGame {
           // move the entity to the next tile
           const newPos = this.#moveEntityMap(pos, qbert, qbert.direction);
           // check if it is falling 
-
           const newPosHeight = this.#getMapHeight(newPos.x, newPos.y);
 
           if (newPosHeight === undefined) {
@@ -394,12 +410,44 @@ class QbertGame {
 
         }
 
+        if (this.deadQbert) {
+          qbert.startDying();
+        }
+
         const mov = this.#getMovement();
         if (mov) {
           qbert.direction = mov;
           qbert.startJump();
         }
         return;
+      case STATE.FALLING: 
+      case STATE.DYING: 
+
+        // almost instant respawn when killed, but let it fall if 
+        // the player jumped outside of the map
+        const respawnTime = qbert.state === STATE.FALLING ? 30 : 10;
+        // wait some time before respawn
+        if (qbert.frameCount > respawnTime) {
+          this.#removeEntityMap(pos, qbert);
+          // add again at first empty tile 
+          let added = false;
+          this.#mapIter(this.entities, (pos, entities) => {
+            if (this.#getMapHeight(pos.x, pos.y) === undefined) {
+              return;
+            }
+
+            if (!added && entities.length == 0) {
+              entities.push(qbert);
+              added = true;
+            }
+          })
+
+          qbert.startIdle();
+
+          this.deadQbert = false;
+        }
+        return
+      
     }
   }
 
@@ -442,7 +490,11 @@ class QbertGame {
           }
         }
 
-        snake.startJump();
+        // some idle time - can only kill when idle
+        if (snake.frameCount > 3) {
+          snake.startJump();
+        }
+
 
         return;
     }
@@ -473,7 +525,7 @@ class QbertGame {
     }
   }
 
-  #moveEntityMap(pos, entity, direction) {
+  #removeEntityMap(pos, entity) {
     const tileEntities = this.entities[pos.x + 1][pos.y + 1];
     let removed = false;
     for (let i = 0; i < tileEntities.length; i++) {
@@ -487,6 +539,10 @@ class QbertGame {
     if (!removed) {
       throw `tried to move entity (${entity}) from ${pos.toString()}, but the entity was not there`;
     }
+  }
+
+  #moveEntityMap(pos, entity, direction) {
+    this.#removeEntityMap(pos, entity);
 
     // add to new position
 
@@ -538,9 +594,6 @@ class QbertGame {
   }
 
   generateEnemies() {
-    if (this.tick < 200) {
-      return
-    };
     if (random() < 0.007) {
       let index, pos;
       while (true) {
@@ -650,7 +703,7 @@ class QbertGame {
       currPos = mapPos.copy().add([0, 0, offHeight]).add(offDir);
       // console.log("currPos", currPos.toString());
 
-    } else if (qbert.state === STATE.IDLE) {
+    } else if (qbert.state === STATE.IDLE || qbert.state == STATE.DYING) {
       //Control out of map
       if (
         !this.#getMapHeight(mapPos.x, mapPos.y) &&
@@ -745,12 +798,23 @@ class QbertGame {
       const factOffDir = t / endTime;
       const offDir = dirVec.copy().mult(factOffDir);
       currPos = mapPos.copy().add([0, 0, offHeight]).add(offDir);
+    } else {
+      currPos = mapPos;
     }
 
     // entities are nicely rendered in an ismoetric map if the sprite center
     // is one unit above the tile they are in
     return currPos.copy().add([0, 0, 1]);
 
+  }
+
+  #drawGUI(cnv) {
+    cnv.push();
+    for (let i = 0; i < this.lifes; i ++) {
+      cnv.image(QbertGame.sprites.LIFE, 10 + 16*i,18, 8, 16);
+    }
+
+    cnv.pop();
   }
 
   draw(cnv) {
@@ -774,6 +838,8 @@ class QbertGame {
 
 
     this.isoRender.draw(cnv, entities);
+
+    this.#drawGUI(cnv);
   }
 }
 
@@ -786,11 +852,11 @@ function preload() {
 let game;
 let ss;
 let proj;
-let count = 0;
 let buffer;
 let screenSize;
 let scale;
 let scaledScreenSize;
+let anyKeyPress = false;
 function setup() {
   const tileSize = 16; // px
   angleMode(DEGREES);
@@ -829,12 +895,38 @@ function draw() {
   //   proj.zero.sub(proj.xUnit.copy().mult(2 * n));
   // }
 
-  game.update();
 
-  buffer.background(1);
-  game.draw(buffer);
 
-  count++;
+  if (!game.gameOver) {
+    game.update();
+    buffer.background(1);
+    game.draw(buffer);
+  } else {
+
+    if (anyKeyPress) {
+      anyKeyPress = false;
+
+      // it is easier to create a new game rather than reset all properties
+      game = new QbertGame(proj, ss);
+    }
+
+    buffer.background(1);
+    buffer.push();
+    const w = round(screenSize.x * 0.8);
+    const h = round(screenSize.y * 0.8);
+    buffer.rectMode(CENTER);
+    buffer.fill("blue");
+    buffer.rect(round(screenSize.x/2), round(screenSize.y/2), w,h);
+    buffer.fill("white");
+    buffer.textAlign(CENTER,CENTER);
+    buffer.textSize(50);
+    buffer.text("GAME\nOVER",round(screenSize.x/2), round(screenSize.y/2) - 20);
+    buffer.textSize(20);
+    buffer.text("press any key\nto restart",round(screenSize.x/2), round(screenSize.y/2) + 60);
+    buffer.pop();
+  }
+
+
 
   image(buffer, 0, 0, scaledScreenSize.x, scaledScreenSize.y);
 }
@@ -844,10 +936,13 @@ function keyPressed() {
   if (Date.now() - timer < 500) {
     return;
   }
-  if ((game.lifes === 3 || !game.fall) && key == "r") {
-    game.reset();
-  }
   timer = Date.now();
+
+  if (game.gameOver) {
+    anyKeyPress = true;
+    return
+  }
+
   let movement = null;
   switch (keyCode) {
     case UP_ARROW:
