@@ -29,7 +29,8 @@ class QbertGame {
     this.spriteSheet = spriteSheet;
     this.size = 7;
     this.proj = proj;
-    this.#initMap(spriteSheet);
+    this.isoRender = new IsometricRender(proj);
+    this.#initMap(proj);
     this.movement = null;
     this.tick = 0;
     this.graceTime = 70; // ticks
@@ -40,10 +41,10 @@ class QbertGame {
     this.qbert = new Qbert(spriteSheet);
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
     // this.mapState[1][1] = 1;
-    this.mapState[0][5] = 1;
-    this.tileMap.updatePowers(createVector(-1, 4, 3));
-    this.mapState[5][0] = 1;
-    this.tileMap.updatePowers(createVector(4, -1, 3));
+    this.tileStates[0][5] = 1;
+    // this.tileMap.updatePowers(createVector(-1, 4, 3));
+    this.tileStates[5][0] = 1;
+    // this.tileMap.updatePowers(createVector(4, -1, 3));
     this.gravity = 0.025;
 
     QbertGame.#loadSprites(spriteSheet);
@@ -62,39 +63,38 @@ class QbertGame {
     this.sprites["LIFE"] = spriteSheet.getSprite("qbert_game_life");
   }
 
-  #initMap(spriteSheet) {
+  #initMap() {
     const size = this.size;
     // this represents the map as a 2d array that includes
     // the border empty spaces
     this.zeroPlane = createVector(1, 1); // actual coordinates of zero in the array
     // this represents the tile states / times pressed
-    const tileStates = [];
     const tiles = [];
     const entities = [];
-    const mapState = [];
+    const tileStates = [];
     for (let x = -1; x < size + 1; x++) {
-      const stateRow = [];
       const entityRow = [];
-      const mapStateRow = [];
+      const tileStateRow = [];
+      const tilesRow = [];
       for (let y = -1; y < size - x + 1; y++) {
         const z = this.#getMapHeight(x, y);
         if (z) {
-          tiles.push(createVector(x, y, z));
+          tilesRow.push(new Tile(createVector(x, y, z), this.proj));
+        } else {
+          tilesRow.push(null);
         }
-        stateRow.push(0);
         entityRow.push([]);
-        mapStateRow.push(0);
+        tileStateRow.push(0);
       }
-      tileStates.push(stateRow);
+      tiles.push(tilesRow)
       entities.push(entityRow);
-      mapState.push(mapStateRow);
+      tileStates.push(tileStateRow);
     }
 
-    this.tileStates = tileStates;
     this.entities = entities;
-    this.mapState = mapState;
-    this.tileMap = new IsometricMap(tiles, proj, spriteSheet);
-    this.isoRender = new IsometricRender(proj);
+    this.tileStates = tileStates;
+    this.tiles = tiles;
+    // this.tileMap = new IsometricMap(tiles, proj, spriteSheet);
   }
 
   #getMapHeight(x, y) {
@@ -106,7 +106,7 @@ class QbertGame {
   }
 
   #verifyPower(x, y) {
-    if ((x < 0 || y < 0) && this.mapState[x + 1][y + 1] == 1) {
+    if ((x < 0 || y < 0) && this.tileStates[x + 1][y + 1] == 1) {
       return this.size - x - y;
     }
 
@@ -154,6 +154,8 @@ class QbertGame {
           this.#updateSnake(pos, entity);
         } else if (entity instanceof Enemy) {
           this.#updateEnemy(pos, entity);
+        } else if (entity instanceof PowerDisk) {
+          this.#updateDisk(pos, entity);
         }
       }
     });
@@ -200,7 +202,7 @@ class QbertGame {
     }
 
     let victory = true;
-    this.#mapIter(this.mapState,
+    this.#mapIter(this.tileStates,
       (pos, tileState) => {
         victory = victory &&
           (this.#getMapHeight(pos.x, pos.y) === undefined || tileState == 1)
@@ -228,6 +230,32 @@ class QbertGame {
   }
 
 
+  #powerAtPos(pos) {
+    return this.entities[pos.x + 1][pos.y + 1].some((e) => e instanceof PowerDisk);
+  }
+
+
+  #qbertAtPos(pos) {
+    return this.entities[pos.x + 1][pos.y + 1].some((e) => e instanceof Qbert);
+  }
+
+  #updateDisk(pos, disk) {
+    disk.update();
+
+    if (disk.state === DISK_STATE.DEAD) {
+      this.#removeEntityMap(pos, disk);
+      return;
+    }
+
+    if (disk.state === DISK_STATE.WITH_QBERT) {
+      return;
+    }
+
+    if (this.#qbertAtPos(pos)) {
+      disk.startWithQbert();
+    }
+  }
+
   /**
    *
    * @param {Qbert} qbert
@@ -247,6 +275,15 @@ class QbertGame {
           const newPosHeight = this.#getMapHeight(newPos.x, newPos.y);
 
           if (newPosHeight === undefined) {
+
+            if (this.#powerAtPos(newPos)) {
+
+              qbert.startOnDisk();
+              return;
+            }
+
+
+
             qbert.startFall();
             return;
           }
@@ -291,6 +328,10 @@ class QbertGame {
           this.deadQbert = false;
         }
         return
+
+      case STATE.ON_DISK:
+
+        return;
 
     }
   }
@@ -385,6 +426,16 @@ class QbertGame {
     }
   }
 
+  #addEntityMap(pos, entity) {
+    const tileEntities = this.entities[pos.x + 1][pos.y + 1];
+    tileEntities.push(entity);
+  }
+
+  #visitTile(pos) {
+    this.tiles[pos.x + 1][pos.y + 1].visit();
+    this.tileStates[pos.x + 1][pos.y + 1] = 1;
+  }
+
   #moveEntityMap(pos, entity, direction) {
     this.#removeEntityMap(pos, entity);
 
@@ -398,9 +449,8 @@ class QbertGame {
       if (pos.x < 0 || pos.y < 0) {
         newPos = createVector(0, 0, 0);
       }
-      if (newPos.x >= 0 && newPos.y >= 0) {
-        this.mapState[newPos.x + 1][newPos.y + 1] = 1;
-        this.tileMap.visitTile(newPos);
+      if (this.#getMapHeight(newPos.x, newPos.y)) {
+        this.#visitTile(newPos)
       }
       this.entities[newPos.x + 1][newPos.y + 1].push(entity);
     } else {
@@ -417,23 +467,44 @@ class QbertGame {
     return newPos;
   }
 
-  updatePowers(pos) {
-    this.mapState[pos.x + 1][pos.y + 1] = 0;
-    this.tileMap.updatePowers(
-      createVector(pos.x, pos.y, this.size - (pos.y < 0 ? pos.x : pos.y)),
-      false
-    );
-  }
 
   generatePowers() {
-    if (random() < 0.01 && this.tileMap.powerTiles.length < 2) {
-      const rand = floor(random(2, 6.9));
-      const position =
-        random() < 0.5
-          ? createVector(-1, rand, this.size - rand)
-          : createVector(rand, -1, this.size - rand);
-      this.tileMap.updatePowers(position);
-      this.mapState[position.x + 1][position.y + 1] = 1;
+    if (random() < 0.1) {
+      // check count of powers on the map (max 2)
+      let powerCount = 0;
+      let existingPowerPos = undefined;
+      this.#mapIter(this.entities, (pos, entities) => {
+        if (entities.some(e => e instanceof PowerDisk)) {
+          powerCount++;
+          existingPowerPos = pos;
+        }
+      })
+
+      if (powerCount >= 2) {
+        return;
+      }
+
+      // one of the power coordinates (x or y) should be -1 
+      // so it is in the empty outer edge, the other one 
+      // should be random such that it is accesible from one of 
+      // the map sides
+      let sidePos = round(random(0, this.size - 1));
+
+      let newPos = random() < 0.5 ? createVector(-1, sidePos) : createVector(sidePos, -1);
+
+      // spawn power to the contrary side of the existing 
+      if (existingPowerPos) {
+        // if the mult is pos they are in the same side
+        if (newPos.x * existingPowerPos.x > 0 || newPos.y * existingPowerPos.y > 0) {
+          newPos = createVector(newPos.y, newPos.x);
+        }
+      }
+
+
+
+      this.#addEntityMap(newPos, new PowerDisk(this.spriteSheet))
+
+
     }
   }
 
@@ -487,9 +558,13 @@ class QbertGame {
       const dirVec = dirToVec(qbert.direction);
       let nextPos = mapPos.copy().add(dirVec);
       let nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
+      let jumpToPower = !nextHeight && this.#powerAtPos(nextPos)
+      if (jumpToPower) {
+        nextHeight = currentHeight;
+      }
       let jump = nextHeight - currentHeight;
 
-      if (mapPos.x < 0 || mapPos.y < 0) {
+      if (!jumpToPower && (mapPos.x < 0 || mapPos.y < 0)) {
         // console.log("got here");
         nextPos = createVector(0, 0);
         nextHeight = 0;
@@ -534,43 +609,12 @@ class QbertGame {
 
       // linear movement in the jump direction
       let factOffDir = t / endTime;
-      if (mapPos.x < 0 || mapPos.y < 0) {
-        factOffDir *= mapPos.x < 0 ? mapPos.y : mapPos.x;
-        offHeight += 1;
-      }
-      if (mapPos.x < 0 || mapPos.y < 0) {
-        let newPos1 = mapPos.copy();
-        newPos1.z = this.size - (mapPos.y < 0 ? newPos1.x : newPos1.y);
-        mapPos = newPos1;
-      }
+
       const offDir = dirVec.copy().mult(factOffDir);
       currPos = mapPos.copy().add([0, 0, offHeight]).add(offDir);
-      // console.log("currPos", currPos.toString());
 
     } else if (qbert.state === STATE.IDLE || qbert.state == STATE.DYING) {
-      //Control out of map
-      if (
-        !this.#getMapHeight(mapPos.x, mapPos.y) &&
-        !this.#verifyPower(mapPos.x, mapPos.y)
-      ) {
-        this.fall = false;
-      }
-
-      // if (mapPos.x < 0) {
-      //   this.reportMovement(DIRECTION.NEG_Y);
-      // } else if (mapPos.y < 0) {
-      //   this.reportMovement(DIRECTION.NEG_X);
-      // }
-
       currPos = mapPos
-
-      if (mapPos.x < 0 || mapPos.y < 0) {
-        this.updatePowers(mapPos);
-        let newPos1 = mapPos.copy();
-        newPos1.z = this.size - (mapPos.y < 0 ? newPos1.x : newPos1.y);
-        currPos = newPos1;
-      }
-
     } else if (qbert.state === STATE.FALLING) {
 
       const previousPos = mapPos.copy().add(dirToVec(invDir(qbert.direction)))
@@ -583,13 +627,68 @@ class QbertGame {
 
       currPos = createVector(mapPos.x, mapPos.y, height);
 
+    } else if (qbert.state === STATE.ON_DISK) {
+      // similar to jump but going on the disk to over the initial tile
 
 
+
+      let closestTilePos;
+      if (mapPos.x < 0) {
+        closestTilePos = mapPos.copy().add([1, 0, 0])
+      } else {
+        closestTilePos = mapPos.copy().add([0, 1, 0])
+      }
+
+      const currentHeight = this.#getMapHeight(closestTilePos.x, closestTilePos.y);
+      mapPos.z = currentHeight;
+
+      // skip first frame while disk state is also changed
+      if (qbert.frameCount === 0) {
+        currPos = mapPos;
+      } else if (qbert.frameCount > 14) {
+
+
+        const previousHeight = this.#getMapHeight(0,0) + 1;
+        const targetHeight = this.#getMapHeight(0,0);
+
+        // falling 
+        const t = qbert.frameCount - 14;
+        // const height = previousHeight - this.gravity * t * t;
+
+        const height = easeIn(t, previousHeight, targetHeight, 5);
+
+
+        currPos = createVector(0,0, height);
+
+      }else {
+        let nextPos = createVector(0, 0);
+        let nextHeight = this.#getMapHeight(0, 0) + 1;
+        let jump = nextHeight - currentHeight;
+
+        let dirVec = nextPos.copy().sub(mapPos);
+        dirVec.z = 0;
+
+
+        let startOff, endOff;
+        let endTime;
+        startOff = 0;
+        endOff = jump;
+        endTime = 13;
+
+
+        const t = qbert.frameCount - 1;
+        let offHeight;
+        offHeight = easeOut(t, startOff, endOff, endTime);
+
+        // linear movement in the jump direction
+        let factOffDir = t / endTime;
+
+        const offDir = dirVec.copy().mult(factOffDir);
+        currPos = mapPos.copy().add([0, 0, offHeight]).add(offDir);
+
+      }
 
     }
-
-
-
     // entities are nicely rendered in an ismoetric map if the sprite center
     // is one unit above the tile they are in
     return currPos.copy().add([0, 0, 1]);
@@ -652,6 +751,65 @@ class QbertGame {
 
   }
 
+
+  #diskProjPos(mapPos, disk) {
+
+    let currPos;
+    if (disk.state === DISK_STATE.IDLE) {
+      // find closest height 
+      let closestTilePos;
+      if (mapPos.x < 0) {
+        closestTilePos = mapPos.copy().add([1, 0, 0])
+      } else {
+        closestTilePos = mapPos.copy().add([0, 1, 0])
+      }
+
+      currPos = createVector(mapPos.x, mapPos.y, this.#getMapHeight(closestTilePos.x, closestTilePos.y));
+
+    } else if (disk.state === DISK_STATE.WITH_QBERT) {
+      // similar to jump but going on the disk to over the initial tile
+
+      let closestTilePos;
+      if (mapPos.x < 0) {
+        closestTilePos = mapPos.copy().add([1, 0, 0])
+      } else {
+        closestTilePos = mapPos.copy().add([0, 1, 0])
+      }
+
+      const currentHeight = this.#getMapHeight(closestTilePos.x, closestTilePos.y);
+      mapPos.z = currentHeight;
+      let nextPos = createVector(0, 0);
+      let nextHeight = this.#getMapHeight(0, 0) + 1;
+      let jump = nextHeight - currentHeight;
+
+      let dirVec = nextPos.copy().sub(mapPos);
+      dirVec.z = 0;
+
+
+      let startOff, endOff;
+      let endTime;
+      startOff = 0;
+      endOff = jump;
+      endTime = 13;
+
+      let t = disk.frameCount;
+      if (t > 13) t = 13;
+      let offHeight;
+      offHeight = easeOut(t, startOff, endOff, endTime);
+      // linear movement in the jump direction
+      let factOffDir = t / endTime;
+
+      const offDir = dirVec.copy().mult(factOffDir);
+      currPos = mapPos.copy().add([0, 0, offHeight]).add(offDir);
+
+    }
+
+    // so we render the power on aligned with the tile tops
+    currPos.add([-0.2, -0.2, 0.45]);
+
+    return currPos;
+  }
+
   #drawGUI(cnv) {
     cnv.push();
     for (let i = 0; i < this.lifes; i++) {
@@ -666,7 +824,8 @@ class QbertGame {
 
     const entities = [];
 
-    entities.push(...this.tileMap.getTiles().map(t => [t.getPosition(), t]));
+    // remove nulls and map them with their respective position
+    entities.push(...this.tiles.flat().filter(t => t).map(t => [t.getPosition(), t]));
 
 
     // console.log(this.entities);
@@ -674,6 +833,8 @@ class QbertGame {
       for (const entity of tileEntities) {
         if (entity instanceof Qbert) {
           entities.push([this.#qbertProjPos(pos, entity), entity])
+        } else if (entity instanceof PowerDisk) {
+          entities.push([this.#diskProjPos(pos, entity), entity])
         } else {
           entities.push([this.#entityProjPos(pos, entity), entity])
         }
@@ -684,6 +845,7 @@ class QbertGame {
     this.isoRender.draw(cnv, entities);
 
     this.#drawGUI(cnv);
+
   }
 }
 
@@ -795,10 +957,6 @@ function draw() {
       drawVictory(buffer);
       break;
   }
-
-
-
-
 
   image(buffer, 0, 0, scaledScreenSize.x, scaledScreenSize.y);
 }

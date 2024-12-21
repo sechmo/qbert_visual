@@ -63,28 +63,11 @@ class IsometricRender {
 
     const sortedElements = elements.toSorted(([pos1, e1], [pos2, e2]) => {
       /*
-        for appropiate rendering of the tiles 
-        lets order them first by height, lower first,
-        then x and y, also lower first
+        for appropiate rendering of the tiles  by their euclidean distance to 
+        the origin, this may not work in all cases but works with qbert
       */
 
-      // const pos1 = e1.getPosition();
-      // const pos2 = e2.getPosition();
-
-      const dz = pos1.z - pos2.z;
-      if (dz != 0) {
-        return dz;
-      }
-
-      const dx = pos1.x - pos2.x;
-      if (dx != 0) {
-        return dx;
-      }
-
-      const dy = pos1.y - pos2.y;
-      if (dy != 0) {
-        return dy;
-      }
+      return (pos1.x + pos1.y + pos1.z) - (pos2.x + pos2.y + pos2.z);
     })
 
     sortedElements.forEach(([pos, e]) => {

@@ -43,6 +43,7 @@ const STATE = Object.freeze({
   JUMPING: "JUMPING",
   FALLING: "FALLING",
   DYING: "DYING",
+  ON_DISK: "ON_DISK"
 });
 
 class Qbert {
@@ -101,6 +102,14 @@ class Qbert {
         }
         this.frameCount++;
         return;
+      case STATE.ON_DISK:
+        if (this.frameCount >= 14 + 5) {
+          this.frameCount = 0;
+          this.state = STATE.IDLE;
+          return;
+        }
+        this.frameCount++;
+        return;
       default:
         this.frameCount++;    
         return;
@@ -125,6 +134,9 @@ class Qbert {
       case STATE.FALLING:
         sprite = Qbert.sprites[this.direction][POSE.UP];
         break;
+      case STATE.ON_DISK:
+        sprite = Qbert.sprites[this.direction][POSE.DOWN];
+        break;
       case STATE.DYING:
         sprite = Qbert.sprites[this.direction][POSE.DOWN];
         bubble = Qbert.bubbleSprite;
@@ -136,6 +148,19 @@ class Qbert {
     if (bubble) {
       cnv.image(bubble, pos.x, pos.y - 16);
     }
+
+    this.drawDebug(cnv, pos);
+  }
+
+
+  drawDebug(cnv, pos) {
+    cnv.push();
+
+    cnv.fill("white");
+    cnv.textSize(8);
+    cnv.text(this.state, pos.x,pos.y);
+
+    cnv.pop();
   }
 
   startJump() {
@@ -155,6 +180,11 @@ class Qbert {
 
   startIdle() {
     this.state = STATE.IDLE;
+    this.frameCount = 0;
+  }
+
+  startOnDisk() {
+    this.state = STATE.ON_DISK;
     this.frameCount = 0;
   }
 }
@@ -298,5 +328,99 @@ class Snake extends Enemy {
     }
     cnv.image(sprite, pos.x, pos.y);
     this.drawDebug(cnv,pos);
+  }
+}
+
+const DISK_STATE = Object.freeze({
+  IDLE: "IDLE", 
+  WITH_QBERT: "WITH_QBERT",
+  DEAD: "DEAD",
+})
+
+class PowerDisk {
+  static sprites = {}
+  static spritesLoaded = false
+  constructor(spriteSheet) {
+    PowerDisk.#loadSprites(spriteSheet);
+    this.palette = round(random(0,7));
+    this.continuousframeCount = 0; // to keep disk rotation state
+    this.frameCount = 0; // to keep animation frame
+    this.state = DISK_STATE.IDLE;
+  }
+
+  static #loadSprites(spriteSheet) {
+    if (this.spritesLoaded) {
+      return;
+    }
+
+    for (let palette = 0; palette < 8; palette++) {
+      for (let state = 0; state < 4; state++) {
+        const name = `power_${palette}_${state}`;
+        spriteSheet.addSpec(
+          name,
+          (state + palette * 5) * 16,
+          22 * 16,
+          16,
+          16
+        );
+        if (!PowerDisk.sprites[palette]) {
+          PowerDisk.sprites[palette] = {};
+        }
+
+        PowerDisk.sprites[palette][state] = spriteSheet.getSprite(name);
+      }
+    }
+
+  }
+
+  draw(cnv, pos) {
+    if (this.state === DISK_STATE.DEAD) {
+      // let qbert fall
+      return;
+    }
+
+    // it rotates each 4 ticks
+    const state = round(this.continuousframeCount / 4) % 4
+    const sprite = PowerDisk.sprites[this.palette][state]
+
+
+    cnv.image(sprite, pos.x, pos.y);
+
+
+    this.drawDebug(cnv, pos);
+
+  }
+
+  update() {
+    this.continuousframeCount++;
+    switch (this.state) {
+      case DISK_STATE.IDLE: 
+        this.frameCount++;
+        return;
+      case DISK_STATE.WITH_QBERT:
+        if (this.frameCount >= 13) {
+          this.frameCount = 0;
+          this.state = DISK_STATE.DEAD;
+        }
+        this.frameCount++;
+        return;
+    }
+  }
+
+  startWithQbert() {
+    this.state = DISK_STATE.WITH_QBERT;
+    this.frameCount = 0;
+  }
+
+
+
+  drawDebug(cnv, pos) {
+    cnv.push();
+
+    cnv.fill("white");
+    cnv.textSize(8);
+    cnv.text(this.state + "" + this.frameCount, pos.x,pos.y);
+
+    cnv.pop();
   }
 }
