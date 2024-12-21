@@ -14,167 +14,12 @@ function easeIn(currentTime, startValue, endValue, totalTime) {
   );
 }
 
-const DIRECTION = Object.freeze({
-  POS_X: "POS_X",
-  NEG_X: "NEG_X",
-  POS_Y: "POS_Y",
-  NEG_Y: "NEG_Y",
+
+const GAME_STATE = Object.freeze({
+  PLAYING: "PLAYING",
+  GAME_OVER: "GAME_OVER",
+  VICTORY: "VICTORY",
 });
-
-function dirToVec(dir) {
-  switch (dir) {
-    case DIRECTION.POS_X:
-      return createVector(1, 0);
-    case DIRECTION.NEG_X:
-      return createVector(-1, 0);
-    case DIRECTION.POS_Y:
-      return createVector(0, 1);
-    case DIRECTION.NEG_Y:
-      return createVector(0, -1);
-    default:
-      throw `invalid DIRECTION "${dir}"`;
-  }
-}
-
-function invDir(dir) {
-  switch (dir) {
-    case DIRECTION.POS_X:
-      return DIRECTION.NEG_X;
-    case DIRECTION.NEG_X:
-      return DIRECTION.POS_X;
-    case DIRECTION.POS_Y:
-      return DIRECTION.NEG_Y;
-    case DIRECTION.NEG_Y:
-      return DIRECTION.POS_Y;
-  }
-}
-
-const POSE = Object.freeze({
-  UP: "UP",
-  DOWN: "DOWN",
-});
-
-const STATE = Object.freeze({
-  IDLE: "IDLE",
-  JUMPING: "JUMPING",
-  FALLING: "FALLING",
-  DYING: "DYING",
-});
-
-class Qbert {
-  static sprites = {};
-  static spritesLoaded = false;
-  constructor(spriteSheet) {
-    Qbert.#loadSprites(spriteSheet);
-
-    this.frameCount = 0;
-    this.direction = DIRECTION.NEG_X;
-    this.state = STATE.IDLE;
-  }
-
-  static #loadSprites(spriteSheet) {
-    if (Qbert.spritesLoaded) {
-      return;
-    }
-    spriteSheet.addSpec("qbert_down_neg_y", 0, 0, 16, 16);
-    spriteSheet.addSpec("qbert_up_neg_y", 16, 0, 16, 16);
-    spriteSheet.addSpec("qbert_down_neg_x", 32, 0, 16, 16);
-    spriteSheet.addSpec("qbert_up_neg_x", 48, 0, 16, 16);
-    spriteSheet.addSpec("qbert_down_pos_x", 64, 0, 16, 16);
-    spriteSheet.addSpec("qbert_up_pos_x", 80, 0, 16, 16);
-    spriteSheet.addSpec("qbert_down_pos_y", 96, 0, 16, 16);
-    spriteSheet.addSpec("qbert_up_pos_y", 112, 0, 16, 16);
-    spriteSheet.addSpec("qbert_text_bubble", 16*8,16*5, 16*3, 16*2);
-
-    Qbert.sprites = {
-      [DIRECTION.NEG_X]: {
-        [POSE.UP]: spriteSheet.getSprite("qbert_up_neg_x"),
-        [POSE.DOWN]: spriteSheet.getSprite("qbert_down_neg_x"),
-      },
-      [DIRECTION.POS_X]: {
-        [POSE.UP]: spriteSheet.getSprite("qbert_up_pos_x"),
-        [POSE.DOWN]: spriteSheet.getSprite("qbert_down_pos_x"),
-      },
-      [DIRECTION.NEG_Y]: {
-        [POSE.UP]: spriteSheet.getSprite("qbert_up_neg_y"),
-        [POSE.DOWN]: spriteSheet.getSprite("qbert_down_neg_y"),
-      },
-      [DIRECTION.POS_Y]: {
-        [POSE.UP]: spriteSheet.getSprite("qbert_up_pos_y"),
-        [POSE.DOWN]: spriteSheet.getSprite("qbert_down_pos_y"),
-      },
-    };
-    Qbert.bubbleSprite = spriteSheet.getSprite("qbert_text_bubble");
-  }
-
-  update() {
-    switch (this.state) {
-      case STATE.JUMPING:
-        if (this.frameCount >= 13) {
-          this.frameCount = 0;
-          this.state = STATE.IDLE;
-          return;
-        }
-        this.frameCount++;
-        return;
-      default:
-        this.frameCount++;
-        return;
-    }
-  }
-
-  draw(cnv, pos) {
-    let sprite;
-    let bubble = null;
-    switch (this.state) {
-      case STATE.IDLE:
-        sprite = Qbert.sprites[this.direction][POSE.DOWN];
-        break;
-      case STATE.JUMPING:
-        // first frame of jumpt just face towards the jump direction
-        if (this.frameCount == 1) {
-          sprite = Qbert.sprites[this.direction][POSE.DOWN];
-          break;
-        }
-        sprite = Qbert.sprites[this.direction][POSE.UP];
-        break;
-      case STATE.FALLING:
-        sprite = Qbert.sprites[this.direction][POSE.UP];
-        break;
-      case STATE.DYING:
-        sprite = Qbert.sprites[this.direction][POSE.DOWN];
-        bubble = Qbert.bubbleSprite;
-        break;
-    }
-
-    // console.log("VOY", sprite);
-    cnv.image(sprite, pos.x, pos.y);
-    if (bubble) {
-      cnv.image(bubble, pos.x, pos.y - 16);
-    }
-  }
-
-  startJump() {
-    this.state = STATE.JUMPING;
-    this.frameCount = 0;
-  }
-
-  startFall() {
-    this.state = STATE.FALLING;
-    this.frameCount = 0;
-  }
-
-  startDying() {
-    this.state = STATE.DYING;
-    this.frameCount = 0;
-  }
-
-  startIdle() {
-    this.state = STATE.IDLE;
-    this.frameCount = 0;
-  }
-}
-
 class QbertGame {
   /**
    *
@@ -189,8 +34,7 @@ class QbertGame {
     this.tick = 0;
     this.graceTime = 70; // ticks
     this.deadQbert = false;
-    this.deathTick = null;
-    this.gameOver = false;
+    this.gameState = GAME_STATE.PLAYING
     this.fall = true;
     this.lifes = 3;
     this.qbert = new Qbert(spriteSheet);
@@ -214,7 +58,7 @@ class QbertGame {
     }
 
     this.spritesLoaded = true;
-    spriteSheet.addSpec("qbert_game_life", 16*14, 16*2, 8, 16);
+    spriteSheet.addSpec("qbert_game_life", 16 * 14, 16 * 2, 8, 16);
     this.sprites["LIFE"] = spriteSheet.getSprite("qbert_game_life");
   }
 
@@ -280,22 +124,30 @@ class QbertGame {
   }
 
   update() {
-    // lets iterate over the entity map and run events for all the entities found.
-    // Note that this is easier than keeping just an entity list since this way
-    // it's easier to check for collisions vs the O(n^2) alternative of checking
-    // for every pair of entities or more complex alternatives.
-    if (this.gameOver) {
+    if (this.gameState != GAME_STATE.PLAYING) {
       return;
     }
 
+
     this.generatePowers();
 
+    // Allow some grace time before starting to spawn enemies
     if (this.tick >= this.graceTime) {
       this.generateEnemies();
     };
 
+    /* 
+     Lets iterate over the entity map and run events for all the entities found.
+     Note that this is easier than keeping just an entity list since this way
+     it's easier to check for collisions vs the O(n^2) alternative of checking
+     for every pair of entities or more complex alternatives.
+    */
     this.#mapIter(this.entities, (pos, tileEntities) => {
       for (const entity of tileEntities) {
+        // entitiy logic update needs map and game properties
+        // so it's simpler to do it in the game class rather than 
+        // saving the game in each entity, and exposing appropiate 
+        // methods, etc. 
         if (entity instanceof Qbert) {
           this.#updateQbert(pos, entity);
         } else if (entity instanceof Snake) {
@@ -303,7 +155,6 @@ class QbertGame {
         } else if (entity instanceof Enemy) {
           this.#updateEnemy(pos, entity);
         }
-        // console.log(pos.toString(), entity.constructor.name, entity);
       }
     });
 
@@ -317,22 +168,36 @@ class QbertGame {
 
   validate() {
     this.deadQbert = false;
-    this.#mapIter(this.entities, (pos, tileEntities) => {
-      let hasQbert = false;
-      let hasEnemies = false;
+    this.#mapIter(this.entities, (_, tileEntities) => {
+      // enemies can only kill qbert when both qbert and them 
+      // are idel on the same tile
+      let hasIdleQbert = false;
+      let hasIdleEnemies = false;
       let qbertFalling = false;
       for (const entity of tileEntities) {
-        hasQbert = hasQbert || (entity instanceof Qbert && entity.state === STATE.IDLE);
         if (entity instanceof Qbert) {
           qbertFalling = entity.state === STATE.FALLING;
         }
-        hasEnemies = hasEnemies || (!(entity instanceof Qbert) && entity.state == STATE.IDLE);
+
+        hasIdleQbert = hasIdleQbert || (entity instanceof Qbert && entity.state === STATE.IDLE);
+        hasIdleEnemies = hasIdleEnemies || (!(entity instanceof Qbert) && entity.state == STATE.IDLE);
       }
 
 
-      this.deadQbert = this.deadQbert || (hasQbert && hasEnemies) || qbertFalling;
+      this.deadQbert = this.deadQbert || (hasIdleQbert && hasIdleEnemies) || qbertFalling;
 
     });
+
+
+    if (this.deadQbert) {
+      this.lifes--;
+    }
+
+
+    if (this.lifes == 0) {
+      this.gameState = GAME_STATE.GAME_OVER;
+      return;
+    }
 
     let victory = true;
     this.#mapIter(this.mapState,
@@ -343,30 +208,9 @@ class QbertGame {
     )
 
     if (victory) {
-      console.log("VICTORIA");
-      noLoop();
+      this.gameState = GAME_STATE.VICTORY
     }
 
-    if (this.deadQbert) {
-      this.lifes--;
-      this.deathTick = this.tick;
-    }
-
-    if (this.lifes == 0) {
-      console.log("GAME OVER");
-      this.gameOver = true;
-    }
-
-    if (!this.deadQbert || !this.fall) {
-      // if (this.lifes == 3 || !this.fall) {
-      //   noLoop();
-      // } else {
-      //   this.removeEnemies();
-      //   this.gameOver = true;
-      //   this.lifes += 1;
-      // }
-      // return;
-    } 
   }
 
   removeEnemies() {
@@ -420,8 +264,8 @@ class QbertGame {
           qbert.startJump();
         }
         return;
-      case STATE.FALLING: 
-      case STATE.DYING: 
+      case STATE.FALLING:
+      case STATE.DYING:
 
         // almost instant respawn when killed, but let it fall if 
         // the player jumped outside of the map
@@ -447,7 +291,7 @@ class QbertGame {
           this.deadQbert = false;
         }
         return
-      
+
     }
   }
 
@@ -731,15 +575,15 @@ class QbertGame {
 
       const previousPos = mapPos.copy().add(dirToVec(invDir(qbert.direction)))
 
-      const previousHeight = this.#getMapHeight(previousPos.x,previousPos.y); // this should not be undefined
+      const previousHeight = this.#getMapHeight(previousPos.x, previousPos.y); // this should not be undefined
 
       // falling 
       const t = qbert.frameCount;
       const height = previousHeight - this.gravity * t * t;
 
-      currPos = createVector(mapPos.x,mapPos.y, height);
+      currPos = createVector(mapPos.x, mapPos.y, height);
 
-      
+
 
 
     }
@@ -810,8 +654,8 @@ class QbertGame {
 
   #drawGUI(cnv) {
     cnv.push();
-    for (let i = 0; i < this.lifes; i ++) {
-      cnv.image(QbertGame.sprites.LIFE, 10 + 16*i,18, 8, 16);
+    for (let i = 0; i < this.lifes; i++) {
+      cnv.image(QbertGame.sprites.LIFE, 10 + 16 * i, 18, 8, 16);
     }
 
     cnv.pop();
@@ -886,45 +730,73 @@ function setup() {
   background(255);
 }
 
-function draw() {
-  // const n = 12
-  // if (count < n) {
-  //   proj.zero.add(proj.xUnit);
-  // } else if (count == n) {
-  //   count = -n - 1;
-  //   proj.zero.sub(proj.xUnit.copy().mult(2 * n));
-  // }
+function drawGameOver(cnv) {
+  // restart game on key press after gameover
+  if (anyKeyPress) {
+    anyKeyPress = false;
 
-
-
-  if (!game.gameOver) {
-    game.update();
-    buffer.background(1);
-    game.draw(buffer);
-  } else {
-
-    if (anyKeyPress) {
-      anyKeyPress = false;
-
-      // it is easier to create a new game rather than reset all properties
-      game = new QbertGame(proj, ss);
-    }
-
-    buffer.background(1);
-    buffer.push();
-    const w = round(screenSize.x * 0.8);
-    const h = round(screenSize.y * 0.8);
-    buffer.rectMode(CENTER);
-    buffer.fill("blue");
-    buffer.rect(round(screenSize.x/2), round(screenSize.y/2), w,h);
-    buffer.fill("white");
-    buffer.textAlign(CENTER,CENTER);
-    buffer.textSize(50);
-    buffer.text("GAME\nOVER",round(screenSize.x/2), round(screenSize.y/2) - 20);
-    buffer.textSize(20);
-    buffer.text("press any key\nto restart",round(screenSize.x/2), round(screenSize.y/2) + 60);
-    buffer.pop();
+    // it is easier to create a new game rather than reset all properties
+    game = new QbertGame(proj, ss);
   }
+
+  cnv.push();
+  const w = round(screenSize.x * 0.8);
+  const h = round(screenSize.y * 0.8);
+  cnv.rectMode(CENTER);
+  cnv.fill("blue");
+  cnv.rect(round(screenSize.x / 2), round(screenSize.y / 2), w, h);
+  cnv.fill("white");
+  cnv.textAlign(CENTER, CENTER);
+  cnv.textSize(50);
+  cnv.text("GAME\nOVER", round(screenSize.x / 2), round(screenSize.y / 2) - 20);
+  cnv.textSize(20);
+  cnv.text("press any key\nto restart", round(screenSize.x / 2), round(screenSize.y / 2) + 60);
+  cnv.pop();
+
+}
+
+function drawVictory(cnv) {
+  // restart game on key press after gameover
+  if (anyKeyPress) {
+    anyKeyPress = false;
+
+    // it is easier to create a new game rather than reset all properties
+    game = new QbertGame(proj, ss);
+  }
+
+  cnv.push();
+  const w = round(screenSize.x * 0.8);
+  const h = round(screenSize.y * 0.8);
+  cnv.rectMode(CENTER);
+  cnv.fill("green");
+  cnv.rect(round(screenSize.x / 2), round(screenSize.y / 2), w, h);
+  cnv.fill("white");
+  cnv.textAlign(CENTER, CENTER);
+  cnv.textSize(50);
+  cnv.text("Victory", round(screenSize.x / 2), round(screenSize.y / 2) - 20);
+  cnv.textSize(20);
+  cnv.text("press any key\nto restart", round(screenSize.x / 2), round(screenSize.y / 2) + 60);
+  cnv.pop();
+
+}
+
+function draw() {
+
+  buffer.background(1);
+  switch (game.gameState) {
+    case GAME_STATE.PLAYING:
+      game.update();
+      game.draw(buffer);
+      break;
+    case GAME_STATE.GAME_OVER:
+      drawGameOver(buffer);
+      break
+    case GAME_STATE.VICTORY:
+      drawVictory(buffer);
+      break;
+  }
+
+
 
 
 
@@ -938,7 +810,7 @@ function keyPressed() {
   }
   timer = Date.now();
 
-  if (game.gameOver) {
+  if (game.gameState !== GAME_STATE.PLAYING) {
     anyKeyPress = true;
     return
   }
