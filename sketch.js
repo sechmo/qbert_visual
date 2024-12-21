@@ -154,6 +154,8 @@ class QbertGame {
           this.#updateSnake(pos, entity);
         } else if (entity instanceof Enemy) {
           this.#updateEnemy(pos, entity);
+        } else if (entity instanceof PowerDisk) {
+          entity.update();
         }
       }
     });

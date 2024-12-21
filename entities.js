@@ -337,8 +337,8 @@ class PowerDisk {
 
   draw(cnv, pos) {
 
-    // it rotates each 20 ticks
-    const state = round(this.frameCount / 20) % 4
+    // it rotates each 4 ticks
+    const state = round(this.frameCount / 4) % 4
     const sprite = PowerDisk.sprites[this.palette][state]
 
 
