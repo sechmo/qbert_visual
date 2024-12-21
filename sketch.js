@@ -40,12 +40,11 @@ class QbertGame {
     this.lifes = 3;
     this.qbert = new Qbert(spriteSheet);
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
-    // this.mapState[1][1] = 1;
     this.tileStates[0][5] = 1;
-    // this.tileMap.updatePowers(createVector(-1, 4, 3));
     this.tileStates[5][0] = 1;
-    // this.tileMap.updatePowers(createVector(4, -1, 3));
     this.gravity = 0.025;
+    this.score = 0;
+
 
     QbertGame.#loadSprites(spriteSheet);
   }
@@ -123,6 +122,10 @@ class QbertGame {
     }
   }
 
+  #updateScore(delta) {
+    this.score += delta;
+  }
+
   update() {
     if (this.gameState != GAME_STATE.PLAYING) {
       return;
@@ -194,6 +197,7 @@ class QbertGame {
 
     if (this.deadQbert) {
       this.lifes--;
+      this.#updateScore(-50);
     }
 
 
@@ -340,7 +344,11 @@ class QbertGame {
         return;
       case STATE.FALLING:
         if (snake.frameCount > 10) {
+          // snake died
           this.#removeEntityMap(pos, snake);
+          // extra points for dodging it
+          this.#updateScore(20);
+          
         }
         return;
       case STATE.IDLE:
@@ -399,7 +407,10 @@ class QbertGame {
         return;
       case STATE.FALLING:
         if (enemy.frameCount > 10) {
+          // ball died
           this.#removeEntityMap(pos, enemy);
+          // extra score for dodging
+          this.#updateScore(10);
         }
         return;
       case STATE.IDLE:
@@ -453,6 +464,7 @@ class QbertGame {
   #visitTile(pos) {
     this.tiles[pos.x + 1][pos.y + 1].visit();
     this.tileStates[pos.x + 1][pos.y + 1] = 1;
+    this.#updateScore(25);
   }
 
   #moveEntityMap(pos, entity, direction) {
@@ -837,9 +849,15 @@ class QbertGame {
 
   #drawGUI(cnv) {
     cnv.push();
+    SpriteText.drawText(cnv, "lives", TYPEFACE.ORANGE_BOLD,10, 9);
     for (let i = 0; i < this.lifes; i++) {
-      cnv.image(QbertGame.sprites.LIFE, 10 + 16 * i, 18, 8, 16);
+      cnv.image(QbertGame.sprites.LIFE, 10 + 16 * i, 22, 8, 16);
     }
+
+
+    SpriteText.drawText(cnv, "score", TYPEFACE.ORANGE_BOLD,255 - 48, 9);
+    SpriteText.drawText(cnv, `${this.score}`, TYPEFACE.GREEN_MEDIUM,255 - 48, 18);
+
 
     cnv.pop();
   }
@@ -906,6 +924,8 @@ function setup() {
   noSmooth();
 
   ss = new SpriteSheet(spriteSheetImg);
+
+  SpriteText.init(ss);
 
   proj = new IsometricProjection(
     screenCenter.copy().add(0, 50),
