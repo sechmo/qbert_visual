@@ -79,6 +79,17 @@ class Enemy {
     }
 
     cnv.image(sprite, pos.x, pos.y);
+    this.drawDebug(cnv, pos);
+  }
+
+  drawDebug(cnv, pos) {
+    cnv.push();
+
+    cnv.fill("white");
+    cnv.textSize(8);
+    cnv.text(this.state, pos.x,pos.y);
+
+    cnv.pop();
   }
 
   startJump() {
@@ -123,7 +134,7 @@ class Snake extends Enemy {
         sprite = Enemy.sprites[this.direction][POSE.UP];
         break;
     }
-
     cnv.image(sprite, pos.x, pos.y);
+    this.drawDebug(cnv,pos);
   }
 }
