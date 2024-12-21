@@ -29,7 +29,8 @@ class QbertGame {
     this.spriteSheet = spriteSheet;
     this.size = 7;
     this.proj = proj;
-    this.#initMap(spriteSheet);
+    this.isoRender = new IsometricRender(proj);
+    this.#initMap(proj);
     this.movement = null;
     this.tick = 0;
     this.graceTime = 70; // ticks
@@ -40,9 +41,9 @@ class QbertGame {
     this.qbert = new Qbert(spriteSheet);
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
     // this.mapState[1][1] = 1;
-    this.mapState[0][5] = 1;
+    this.tileStates[0][5] = 1;
     // this.tileMap.updatePowers(createVector(-1, 4, 3));
-    this.mapState[5][0] = 1;
+    this.tileStates[5][0] = 1;
     // this.tileMap.updatePowers(createVector(4, -1, 3));
     this.gravity = 0.025;
 
@@ -62,39 +63,38 @@ class QbertGame {
     this.sprites["LIFE"] = spriteSheet.getSprite("qbert_game_life");
   }
 
-  #initMap(spriteSheet) {
+  #initMap() {
     const size = this.size;
     // this represents the map as a 2d array that includes
     // the border empty spaces
     this.zeroPlane = createVector(1, 1); // actual coordinates of zero in the array
     // this represents the tile states / times pressed
-    const tileStates = [];
     const tiles = [];
     const entities = [];
-    const mapState = [];
+    const tileStates = [];
     for (let x = -1; x < size + 1; x++) {
-      const stateRow = [];
       const entityRow = [];
-      const mapStateRow = [];
+      const tileStateRow = [];
+      const tilesRow = [];
       for (let y = -1; y < size - x + 1; y++) {
         const z = this.#getMapHeight(x, y);
         if (z) {
-          tiles.push(createVector(x, y, z));
+          tilesRow.push(new Tile(createVector(x, y, z), this.proj));
+        } else {
+          tilesRow.push(null);
         }
-        stateRow.push(0);
         entityRow.push([]);
-        mapStateRow.push(0);
+        tileStateRow.push(0);
       }
-      tileStates.push(stateRow);
+      tiles.push(tilesRow)
       entities.push(entityRow);
-      mapState.push(mapStateRow);
+      tileStates.push(tileStateRow);
     }
 
-    this.tileStates = tileStates;
     this.entities = entities;
-    this.mapState = mapState;
-    this.tileMap = new IsometricMap(tiles, proj, spriteSheet);
-    this.isoRender = new IsometricRender(proj);
+    this.tileStates = tileStates;
+    this.tiles = tiles;
+    // this.tileMap = new IsometricMap(tiles, proj, spriteSheet);
   }
 
   #getMapHeight(x, y) {
@@ -106,7 +106,7 @@ class QbertGame {
   }
 
   #verifyPower(x, y) {
-    if ((x < 0 || y < 0) && this.mapState[x + 1][y + 1] == 1) {
+    if ((x < 0 || y < 0) && this.tileStates[x + 1][y + 1] == 1) {
       return this.size - x - y;
     }
 
@@ -200,7 +200,7 @@ class QbertGame {
     }
 
     let victory = true;
-    this.#mapIter(this.mapState,
+    this.#mapIter(this.tileStates,
       (pos, tileState) => {
         victory = victory &&
           (this.#getMapHeight(pos.x, pos.y) === undefined || tileState == 1)
@@ -390,6 +390,11 @@ class QbertGame {
     tileEntities.push(entity);
   }
 
+  #visitTile(pos) {
+    this.tiles[pos.x + 1][pos.y + 1].visit();
+    this.tileStates[pos.x + 1][pos.y + 1] = 1;
+  }
+
   #moveEntityMap(pos, entity, direction) {
     this.#removeEntityMap(pos, entity);
 
@@ -403,9 +408,8 @@ class QbertGame {
       if (pos.x < 0 || pos.y < 0) {
         newPos = createVector(0, 0, 0);
       }
-      if (newPos.x >= 0 && newPos.y >= 0) {
-        this.mapState[newPos.x + 1][newPos.y + 1] = 1;
-        this.tileMap.visitTile(newPos);
+      if (this.#getMapHeight(newPos.x, newPos.y)) {
+        this.#visitTile(newPos)
       }
       this.entities[newPos.x + 1][newPos.y + 1].push(entity);
     } else {
@@ -423,7 +427,7 @@ class QbertGame {
   }
 
   updatePowers(pos) {
-    this.mapState[pos.x + 1][pos.y + 1] = 0;
+    this.tileStates[pos.x + 1][pos.y + 1] = 0;
     this.tileMap.updatePowers(
       createVector(pos.x, pos.y, this.size - (pos.y < 0 ? pos.x : pos.y)),
       false
@@ -450,7 +454,7 @@ class QbertGame {
       // so it is in the empty outer edge, the other one 
       // should be random such that it is accesible from one of 
       // the map sides
-      let sidePos = round(random(0, this.size-1));
+      let sidePos = round(random(0, this.size - 1));
 
       let newPos = random() < 0.5 ? createVector(-1, sidePos) : createVector(sidePos, -1);
 
@@ -462,9 +466,6 @@ class QbertGame {
         }
       }
 
-
-
-      console.log("power pos", newPos.toString());
 
 
       this.#addEntityMap(newPos, new PowerDisk(this.spriteSheet))
@@ -692,15 +693,15 @@ class QbertGame {
     // find closest height 
     let closestTilePos;
     if (mapPos.x < 0) {
-      closestTilePos = mapPos.copy().add([1,0,0])
+      closestTilePos = mapPos.copy().add([1, 0, 0])
     } else {
-      closestTilePos = mapPos.copy().add([0,1,0])
+      closestTilePos = mapPos.copy().add([0, 1, 0])
     }
 
     const projPos = createVector(mapPos.x, mapPos.y, this.#getMapHeight(closestTilePos.x, closestTilePos.y));
-    
+
     // so we render the power on aligned with the tile tops
-    projPos.add([0,0,0.45]);
+    projPos.add([0, 0, 0.45]);
 
     return projPos;
   }
@@ -719,7 +720,8 @@ class QbertGame {
 
     const entities = [];
 
-    entities.push(...this.tileMap.getTiles().map(t => [t.getPosition(), t]));
+    // remove nulls and map them with their respective position
+    entities.push(...this.tiles.flat().filter(t => t).map(t => [t.getPosition(), t]));
 
 
     // console.log(this.entities);
