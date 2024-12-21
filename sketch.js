@@ -33,7 +33,7 @@ class QbertGame {
     this.#initMap(proj);
     this.movement = null;
     this.tick = 0;
-    this.graceTime = 70; // ticks
+    this.graceTime = 30; // ticks
     this.deadQbert = false;
     this.gameState = GAME_STATE.PLAYING
     this.fall = true;
@@ -129,11 +129,11 @@ class QbertGame {
     }
 
 
-    this.generatePowers();
+    this.spawnPowers();
 
     // Allow some grace time before starting to spawn enemies
     if (this.tick >= this.graceTime) {
-      this.generateEnemies();
+      this.spawnEnemies();
     };
 
     /* 
@@ -182,8 +182,9 @@ class QbertGame {
         }
 
         hasIdleQbert = hasIdleQbert || (entity instanceof Qbert && entity.state === STATE.IDLE);
-        hasIdleEnemies = hasIdleEnemies || (!(entity instanceof Qbert) && entity.state == STATE.IDLE);
+        hasIdleEnemies = hasIdleEnemies || ((entity instanceof Enemy) && entity.state == STATE.IDLE);
       }
+
 
 
       this.deadQbert = this.deadQbert || (hasIdleQbert && hasIdleEnemies) || qbertFalling;
@@ -213,20 +214,6 @@ class QbertGame {
       this.gameState = GAME_STATE.VICTORY
     }
 
-  }
-
-  removeEnemies() {
-    this.#mapIter(this.entities, (pos, tileEntities) => {
-      for (let i = 0; i < tileEntities.length; i++) {
-        if (
-          tileEntities[i] instanceof Enemy ||
-          tileEntities[i] instanceof Snake
-        ) {
-          tileEntities.splice(i, 1);
-          // console.log(pos.toString());
-        }
-      }
-    });
   }
 
 
@@ -270,7 +257,16 @@ class QbertGame {
         // just finished jumping
         if (qbert.frameCount === 0) {
           // move the entity to the next tile
-          const newPos = this.#moveEntityMap(pos, qbert, qbert.direction);
+          let newPos;
+          if (qbert.wasOnDisk) {
+            newPos = this.#moveEntityTo(pos, qbert, createVector(0,0));
+            qbert.wasOnDisk = false;
+
+          } else {
+            newPos  = this.#moveEntityMap(pos, qbert, qbert.direction);
+
+          }
+
           // check if it is falling 
           const newPosHeight = this.#getMapHeight(newPos.x, newPos.y);
 
@@ -342,11 +338,21 @@ class QbertGame {
     switch (snake.state) {
       case STATE.JUMPING:
         return;
+      case STATE.FALLING:
+        if (snake.frameCount > 10) {
+          this.#removeEntityMap(pos, snake);
+        }
+        return;
       case STATE.IDLE:
         // just finished jumping
         if (snake.frameCount === 0) {
           // move the entity to the next frame
-          this.#moveEntityMap(pos, snake, snake.direction);
+          const newPos = this.#moveEntityMap(pos, snake, snake.direction);
+
+          if (!this.#getMapHeight(newPos.x,newPos.y)) {
+            snake.startFall();
+            return;
+          }
         }
 
         let posQbert;
@@ -391,11 +397,21 @@ class QbertGame {
     switch (enemy.state) {
       case STATE.JUMPING:
         return;
+      case STATE.FALLING:
+        if (enemy.frameCount > 10) {
+          this.#removeEntityMap(pos, enemy);
+        }
+        return;
       case STATE.IDLE:
         // just finished jumping
         if (enemy.frameCount === 0) {
-          // move the entity to the next frame
-          this.#moveEntityMap(pos, enemy, enemy.direction);
+          // move the entity to the next tile
+          const newPos = this.#moveEntityMap(pos, enemy, enemy.direction);
+
+          if (!this.#getMapHeight(newPos.x,newPos.y)) {
+            enemy.startFall();
+            return;
+          }
         }
 
         if (random() < 0.5 || pos.x == this.size - 1) {
@@ -404,7 +420,10 @@ class QbertGame {
           enemy.direction = DIRECTION.POS_X;
         }
 
-        enemy.startJump();
+
+        if (enemy.frameCount > 3) {
+          enemy.startJump();
+        }
 
         return;
     }
@@ -445,31 +464,32 @@ class QbertGame {
     let newPos = pos.copy().add(delta);
 
     if (entity instanceof Qbert) {
-      //Fix final position power
-      if (pos.x < 0 || pos.y < 0) {
-        newPos = createVector(0, 0, 0);
-      }
       if (this.#getMapHeight(newPos.x, newPos.y)) {
         this.#visitTile(newPos)
       }
-      this.entities[newPos.x + 1][newPos.y + 1].push(entity);
-    } else {
-      if (
-        newPos.x >= 0 &&
-        newPos.y >= 0 &&
-        newPos.x <= this.size - 1 &&
-        newPos.y <= this.size - newPos.x - 1
-      ) {
-        this.entities[newPos.x + 1][newPos.y + 1].push(entity);
-      }
-    }
+    }  
+    this.entities[newPos.x + 1][newPos.y + 1].push(entity);
 
     return newPos;
   }
 
+  #moveEntityTo(oldPos, entity, newPos) {
+    this.#removeEntityMap(oldPos, entity);
 
-  generatePowers() {
-    if (random() < 0.1) {
+    if (entity instanceof Qbert) {
+      if (this.#getMapHeight(newPos.x, newPos.y)) {
+        this.#visitTile(newPos)
+      }
+    }  
+    this.entities[newPos.x + 1][newPos.y + 1].push(entity);
+
+    return newPos;
+
+  }
+
+
+  spawnPowers() {
+    if (random() < 0.01) {
       // check count of powers on the map (max 2)
       let powerCount = 0;
       let existingPowerPos = undefined;
@@ -508,7 +528,7 @@ class QbertGame {
     }
   }
 
-  generateEnemies() {
+  spawnEnemies() {
     if (random() < 0.007) {
       let index, pos;
       while (true) {
@@ -558,18 +578,11 @@ class QbertGame {
       const dirVec = dirToVec(qbert.direction);
       let nextPos = mapPos.copy().add(dirVec);
       let nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
-      let jumpToPower = !nextHeight && this.#powerAtPos(nextPos)
-      if (jumpToPower) {
+      if (!nextHeight) {
         nextHeight = currentHeight;
       }
       let jump = nextHeight - currentHeight;
 
-      if (!jumpToPower && (mapPos.x < 0 || mapPos.y < 0)) {
-        // console.log("got here");
-        nextPos = createVector(0, 0);
-        nextHeight = 0;
-        jump = mapPos.x < 0 ? mapPos.y : mapPos.x;
-      }
 
       //Jump to a power
       if (this.#verifyPower(nextPos.x, nextPos.y)) {
@@ -704,10 +717,11 @@ class QbertGame {
       const currentHeight = mapPos.z;
       const dirVec = dirToVec(entity.direction);
       const nextPos = mapPos.copy().add(dirVec);
-      const nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
+      let nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
+      if (!nextHeight) {
+        nextHeight = currentHeight;
+      }
       const jump = nextHeight - currentHeight;
-
-      // console.log({ jumpUp: jump });
 
       let startOff, middleOff, endOff;
       let middleTime, endTime;
@@ -741,6 +755,17 @@ class QbertGame {
       const factOffDir = t / endTime;
       const offDir = dirVec.copy().mult(factOffDir);
       currPos = mapPos.copy().add([0, 0, offHeight]).add(offDir);
+    } else if (entity.state === STATE.FALLING) {
+
+      const previousPos = mapPos.copy().add(dirToVec(invDir(entity.direction)))
+
+      const previousHeight = this.#getMapHeight(previousPos.x, previousPos.y); // this should not be undefined
+
+      // falling 
+      const t = entity.frameCount;
+      const height = previousHeight - this.gravity * t * t;
+
+      currPos = createVector(mapPos.x, mapPos.y, height);
     } else {
       currPos = mapPos;
     }

@@ -55,6 +55,7 @@ class Qbert {
     this.frameCount = 0;
     this.direction = DIRECTION.NEG_X;
     this.state = STATE.IDLE;
+    this.wasOnDisk = false;
   }
 
   static #loadSprites(spriteSheet) {
@@ -105,6 +106,7 @@ class Qbert {
       case STATE.ON_DISK:
         if (this.frameCount >= 14 + 5) {
           this.frameCount = 0;
+          this.wasOnDisk = true;
           this.state = STATE.IDLE;
           return;
         }
@@ -204,8 +206,8 @@ class Enemy {
     if (Enemy.spritesLoaded) {
       return;
     }
-    spriteSheet.addSpec("enemy_down", 0, 16, 16, 16);
-    spriteSheet.addSpec("enemy_up", 16, 16, 16, 16);
+    spriteSheet.addSpec("enemy_up", 0, 16, 16, 16);
+    spriteSheet.addSpec("enemy_down", 16, 16, 16, 16);
 
     spriteSheet.addSpec("snake_down_neg_y", 0, 48, 16, 16);
     spriteSheet.addSpec("snake_up_neg_y", 16, 32, 16, 32);
@@ -240,6 +242,7 @@ class Enemy {
 
   update() {
     switch (this.state) {
+      case STATE.FALLING:
       case STATE.IDLE:
         this.frameCount++;
         return;
@@ -268,6 +271,9 @@ class Enemy {
         }
         sprite = Enemy.sprites[POSE.UP];
         break;
+      case STATE.FALLING:
+        sprite = Enemy.sprites[POSE.UP];
+        break;
     }
 
     cnv.image(sprite, pos.x, pos.y);
@@ -288,6 +294,11 @@ class Enemy {
     this.state = STATE.JUMPING;
     this.frameCount = 0;
   }
+
+  startFall() {
+    this.state = STATE.FALLING;
+    this.frameCount = 0;
+  }
 }
 
 class Snake extends Enemy {
@@ -297,6 +308,7 @@ class Snake extends Enemy {
 
   update() {
     switch (this.state) {
+      case STATE.FALLING:
       case STATE.IDLE:
         this.frameCount++;
         return;
@@ -323,6 +335,9 @@ class Snake extends Enemy {
           sprite = Enemy.sprites[this.direction][POSE.DOWN];
           break;
         }
+        sprite = Enemy.sprites[this.direction][POSE.UP];
+        break;
+      case STATE.FALLING:
         sprite = Enemy.sprites[this.direction][POSE.UP];
         break;
     }
