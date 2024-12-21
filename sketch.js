@@ -155,7 +155,7 @@ class QbertGame {
         } else if (entity instanceof Enemy) {
           this.#updateEnemy(pos, entity);
         } else if (entity instanceof PowerDisk) {
-          entity.update();
+          this.#updateDisk(pos, entity);
         }
       }
     });
@@ -230,6 +230,32 @@ class QbertGame {
   }
 
 
+  #powerAtPos(pos) {
+    return this.entities[pos.x + 1][pos.y + 1].some((e) => e instanceof PowerDisk);
+  }
+
+
+  #qbertAtPos(pos) {
+    return this.entities[pos.x + 1][pos.y + 1].some((e) => e instanceof Qbert);
+  }
+
+  #updateDisk(pos, disk) {
+    disk.update();
+
+    if (disk.state === DISK_STATE.DEAD) {
+      this.#removeEntityMap(pos, disk);
+      return;
+    }
+
+    if (disk.state === DISK_STATE.WITH_QBERT) {
+      return;
+    }
+
+    if (this.#qbertAtPos(pos)) {
+      disk.startWithQbert();
+    }
+  }
+
   /**
    *
    * @param {Qbert} qbert
@@ -249,6 +275,15 @@ class QbertGame {
           const newPosHeight = this.#getMapHeight(newPos.x, newPos.y);
 
           if (newPosHeight === undefined) {
+
+            if (this.#powerAtPos(newPos)) {
+
+              qbert.startOnDisk();
+              return;
+            }
+
+
+
             qbert.startFall();
             return;
           }
@@ -293,6 +328,10 @@ class QbertGame {
           this.deadQbert = false;
         }
         return
+
+      case STATE.ON_DISK:
+
+        return;
 
     }
   }
@@ -428,16 +467,9 @@ class QbertGame {
     return newPos;
   }
 
-  updatePowers(pos) {
-    this.tileStates[pos.x + 1][pos.y + 1] = 0;
-    this.tileMap.updatePowers(
-      createVector(pos.x, pos.y, this.size - (pos.y < 0 ? pos.x : pos.y)),
-      false
-    );
-  }
 
   generatePowers() {
-    if (random() < 0.01) {
+    if (random() < 0.1) {
       // check count of powers on the map (max 2)
       let powerCount = 0;
       let existingPowerPos = undefined;
@@ -526,9 +558,13 @@ class QbertGame {
       const dirVec = dirToVec(qbert.direction);
       let nextPos = mapPos.copy().add(dirVec);
       let nextHeight = this.#getMapHeight(nextPos.x, nextPos.y);
+      let jumpToPower = !nextHeight && this.#powerAtPos(nextPos)
+      if (jumpToPower) {
+        nextHeight = currentHeight;
+      }
       let jump = nextHeight - currentHeight;
 
-      if (mapPos.x < 0 || mapPos.y < 0) {
+      if (!jumpToPower && (mapPos.x < 0 || mapPos.y < 0)) {
         // console.log("got here");
         nextPos = createVector(0, 0);
         nextHeight = 0;
@@ -573,43 +609,12 @@ class QbertGame {
 
       // linear movement in the jump direction
       let factOffDir = t / endTime;
-      if (mapPos.x < 0 || mapPos.y < 0) {
-        factOffDir *= mapPos.x < 0 ? mapPos.y : mapPos.x;
-        offHeight += 1;
-      }
-      if (mapPos.x < 0 || mapPos.y < 0) {
-        let newPos1 = mapPos.copy();
-        newPos1.z = this.size - (mapPos.y < 0 ? newPos1.x : newPos1.y);
-        mapPos = newPos1;
-      }
+
       const offDir = dirVec.copy().mult(factOffDir);
       currPos = mapPos.copy().add([0, 0, offHeight]).add(offDir);
-      // console.log("currPos", currPos.toString());
 
     } else if (qbert.state === STATE.IDLE || qbert.state == STATE.DYING) {
-      //Control out of map
-      if (
-        !this.#getMapHeight(mapPos.x, mapPos.y) &&
-        !this.#verifyPower(mapPos.x, mapPos.y)
-      ) {
-        this.fall = false;
-      }
-
-      // if (mapPos.x < 0) {
-      //   this.reportMovement(DIRECTION.NEG_Y);
-      // } else if (mapPos.y < 0) {
-      //   this.reportMovement(DIRECTION.NEG_X);
-      // }
-
       currPos = mapPos
-
-      if (mapPos.x < 0 || mapPos.y < 0) {
-        this.updatePowers(mapPos);
-        let newPos1 = mapPos.copy();
-        newPos1.z = this.size - (mapPos.y < 0 ? newPos1.x : newPos1.y);
-        currPos = newPos1;
-      }
-
     } else if (qbert.state === STATE.FALLING) {
 
       const previousPos = mapPos.copy().add(dirToVec(invDir(qbert.direction)))
@@ -622,13 +627,68 @@ class QbertGame {
 
       currPos = createVector(mapPos.x, mapPos.y, height);
 
+    } else if (qbert.state === STATE.ON_DISK) {
+      // similar to jump but going on the disk to over the initial tile
 
 
+
+      let closestTilePos;
+      if (mapPos.x < 0) {
+        closestTilePos = mapPos.copy().add([1, 0, 0])
+      } else {
+        closestTilePos = mapPos.copy().add([0, 1, 0])
+      }
+
+      const currentHeight = this.#getMapHeight(closestTilePos.x, closestTilePos.y);
+      mapPos.z = currentHeight;
+
+      // skip first frame while disk state is also changed
+      if (qbert.frameCount === 0) {
+        currPos = mapPos;
+      } else if (qbert.frameCount > 14) {
+
+
+        const previousHeight = this.#getMapHeight(0,0) + 1;
+        const targetHeight = this.#getMapHeight(0,0);
+
+        // falling 
+        const t = qbert.frameCount - 14;
+        // const height = previousHeight - this.gravity * t * t;
+
+        const height = easeIn(t, previousHeight, targetHeight, 5);
+
+
+        currPos = createVector(0,0, height);
+
+      }else {
+        let nextPos = createVector(0, 0);
+        let nextHeight = this.#getMapHeight(0, 0) + 1;
+        let jump = nextHeight - currentHeight;
+
+        let dirVec = nextPos.copy().sub(mapPos);
+        dirVec.z = 0;
+
+
+        let startOff, endOff;
+        let endTime;
+        startOff = 0;
+        endOff = jump;
+        endTime = 13;
+
+
+        const t = qbert.frameCount - 1;
+        let offHeight;
+        offHeight = easeOut(t, startOff, endOff, endTime);
+
+        // linear movement in the jump direction
+        let factOffDir = t / endTime;
+
+        const offDir = dirVec.copy().mult(factOffDir);
+        currPos = mapPos.copy().add([0, 0, offHeight]).add(offDir);
+
+      }
 
     }
-
-
-
     // entities are nicely rendered in an ismoetric map if the sprite center
     // is one unit above the tile they are in
     return currPos.copy().add([0, 0, 1]);
@@ -691,21 +751,63 @@ class QbertGame {
 
   }
 
+
   #diskProjPos(mapPos, disk) {
-    // find closest height 
-    let closestTilePos;
-    if (mapPos.x < 0) {
-      closestTilePos = mapPos.copy().add([1, 0, 0])
-    } else {
-      closestTilePos = mapPos.copy().add([0, 1, 0])
+
+    let currPos;
+    if (disk.state === DISK_STATE.IDLE) {
+      // find closest height 
+      let closestTilePos;
+      if (mapPos.x < 0) {
+        closestTilePos = mapPos.copy().add([1, 0, 0])
+      } else {
+        closestTilePos = mapPos.copy().add([0, 1, 0])
+      }
+
+      currPos = createVector(mapPos.x, mapPos.y, this.#getMapHeight(closestTilePos.x, closestTilePos.y));
+
+    } else if (disk.state === DISK_STATE.WITH_QBERT) {
+      // similar to jump but going on the disk to over the initial tile
+
+      let closestTilePos;
+      if (mapPos.x < 0) {
+        closestTilePos = mapPos.copy().add([1, 0, 0])
+      } else {
+        closestTilePos = mapPos.copy().add([0, 1, 0])
+      }
+
+      const currentHeight = this.#getMapHeight(closestTilePos.x, closestTilePos.y);
+      mapPos.z = currentHeight;
+      let nextPos = createVector(0, 0);
+      let nextHeight = this.#getMapHeight(0, 0) + 1;
+      let jump = nextHeight - currentHeight;
+
+      let dirVec = nextPos.copy().sub(mapPos);
+      dirVec.z = 0;
+
+
+      let startOff, endOff;
+      let endTime;
+      startOff = 0;
+      endOff = jump;
+      endTime = 13;
+
+      let t = disk.frameCount;
+      if (t > 13) t = 13;
+      let offHeight;
+      offHeight = easeOut(t, startOff, endOff, endTime);
+      // linear movement in the jump direction
+      let factOffDir = t / endTime;
+
+      const offDir = dirVec.copy().mult(factOffDir);
+      currPos = mapPos.copy().add([0, 0, offHeight]).add(offDir);
+
     }
 
-    const projPos = createVector(mapPos.x, mapPos.y, this.#getMapHeight(closestTilePos.x, closestTilePos.y));
-
     // so we render the power on aligned with the tile tops
-    projPos.add([0, 0, 0.45]);
+    currPos.add([-0.2, -0.2, 0.45]);
 
-    return projPos;
+    return currPos;
   }
 
   #drawGUI(cnv) {
@@ -743,6 +845,7 @@ class QbertGame {
     this.isoRender.draw(cnv, entities);
 
     this.#drawGUI(cnv);
+
   }
 }
 
@@ -854,10 +957,6 @@ function draw() {
       drawVictory(buffer);
       break;
   }
-
-
-
-
 
   image(buffer, 0, 0, scaledScreenSize.x, scaledScreenSize.y);
 }
