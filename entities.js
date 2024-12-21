@@ -151,7 +151,7 @@ class Qbert {
       cnv.image(bubble, pos.x, pos.y - 16);
     }
 
-    this.drawDebug(cnv, pos);
+    // this.drawDebug(cnv, pos);
   }
 
 
@@ -277,7 +277,7 @@ class Enemy {
     }
 
     cnv.image(sprite, pos.x, pos.y);
-    this.drawDebug(cnv, pos);
+    // this.drawDebug(cnv, pos);
   }
 
   drawDebug(cnv, pos) {
@@ -342,7 +342,7 @@ class Snake extends Enemy {
         break;
     }
     cnv.image(sprite, pos.x, pos.y);
-    this.drawDebug(cnv,pos);
+    // this.drawDebug(cnv,pos);
   }
 }
 
@@ -402,7 +402,7 @@ class PowerDisk {
     cnv.image(sprite, pos.x, pos.y);
 
 
-    this.drawDebug(cnv, pos);
+    // this.drawDebug(cnv, pos);
 
   }
 
