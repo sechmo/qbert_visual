@@ -45,6 +45,8 @@ class QbertGame {
     this.gravity = 0.025;
     this.score = 0;
 
+    Tile.loadSprites(spriteSheet);
+
 
     QbertGame.#loadSprites(spriteSheet);
   }
