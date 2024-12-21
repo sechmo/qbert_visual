@@ -755,6 +755,31 @@ function drawGameOver(cnv) {
 
 }
 
+function drawVictory(cnv) {
+  // restart game on key press after gameover
+  if (anyKeyPress) {
+    anyKeyPress = false;
+
+    // it is easier to create a new game rather than reset all properties
+    game = new QbertGame(proj, ss);
+  }
+
+  cnv.push();
+  const w = round(screenSize.x * 0.8);
+  const h = round(screenSize.y * 0.8);
+  cnv.rectMode(CENTER);
+  cnv.fill("green");
+  cnv.rect(round(screenSize.x / 2), round(screenSize.y / 2), w, h);
+  cnv.fill("white");
+  cnv.textAlign(CENTER, CENTER);
+  cnv.textSize(50);
+  cnv.text("Victory", round(screenSize.x / 2), round(screenSize.y / 2) - 20);
+  cnv.textSize(20);
+  cnv.text("press any key\nto restart", round(screenSize.x / 2), round(screenSize.y / 2) + 60);
+  cnv.pop();
+
+}
+
 function draw() {
 
   buffer.background(1);
@@ -767,6 +792,7 @@ function draw() {
       drawGameOver(buffer);
       break
     case GAME_STATE.VICTORY:
+      drawVictory(buffer);
       break;
   }
 
@@ -784,7 +810,7 @@ function keyPressed() {
   }
   timer = Date.now();
 
-  if (game.gameOver) {
+  if (game.gameState !== GAME_STATE.PLAYING) {
     anyKeyPress = true;
     return
   }
