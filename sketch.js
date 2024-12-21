@@ -41,9 +41,9 @@ class QbertGame {
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
     // this.mapState[1][1] = 1;
     this.mapState[0][5] = 1;
-    this.tileMap.updatePowers(createVector(-1, 4, 3));
+    // this.tileMap.updatePowers(createVector(-1, 4, 3));
     this.mapState[5][0] = 1;
-    this.tileMap.updatePowers(createVector(4, -1, 3));
+    // this.tileMap.updatePowers(createVector(4, -1, 3));
     this.gravity = 0.025;
 
     QbertGame.#loadSprites(spriteSheet);
@@ -385,6 +385,11 @@ class QbertGame {
     }
   }
 
+  #addEntityMap(pos, entity) {
+    const tileEntities = this.entities[pos.x + 1][pos.y + 1];
+    tileEntities.push(entity);
+  }
+
   #moveEntityMap(pos, entity, direction) {
     this.#removeEntityMap(pos, entity);
 
@@ -426,14 +431,45 @@ class QbertGame {
   }
 
   generatePowers() {
-    if (random() < 0.01 && this.tileMap.powerTiles.length < 2) {
-      const rand = floor(random(2, 6.9));
-      const position =
-        random() < 0.5
-          ? createVector(-1, rand, this.size - rand)
-          : createVector(rand, -1, this.size - rand);
-      this.tileMap.updatePowers(position);
-      this.mapState[position.x + 1][position.y + 1] = 1;
+    if (random() < 0.01) {
+      // check count of powers on the map (max 2)
+      let powerCount = 0;
+      let existingPowerPos = undefined;
+      this.#mapIter(this.entities, (pos, entities) => {
+        if (entities.some(e => e instanceof PowerDisk)) {
+          powerCount++;
+          existingPowerPos = pos;
+        }
+      })
+
+      if (powerCount >= 2) {
+        return;
+      }
+
+      // one of the power coordinates (x or y) should be -1 
+      // so it is in the empty outer edge, the other one 
+      // should be random such that it is accesible from one of 
+      // the map sides
+      let sidePos = round(random(0, this.size-1));
+
+      let newPos = random() < 0.5 ? createVector(-1, sidePos) : createVector(sidePos, -1);
+
+      // spawn power to the contrary side of the existing 
+      if (existingPowerPos) {
+        // if the mult is pos they are in the same side
+        if (newPos.x * existingPowerPos.x > 0 || newPos.y * existingPowerPos.y > 0) {
+          newPos = createVector(newPos.y, newPos.x);
+        }
+      }
+
+
+
+      console.log("power pos", newPos.toString());
+
+
+      this.#addEntityMap(newPos, new PowerDisk(this.spriteSheet))
+
+
     }
   }
 
@@ -652,6 +688,23 @@ class QbertGame {
 
   }
 
+  #diskProjPos(mapPos, disk) {
+    // find closest height 
+    let closestTilePos;
+    if (mapPos.x < 0) {
+      closestTilePos = mapPos.copy().add([1,0,0])
+    } else {
+      closestTilePos = mapPos.copy().add([0,1,0])
+    }
+
+    const projPos = createVector(mapPos.x, mapPos.y, this.#getMapHeight(closestTilePos.x, closestTilePos.y));
+    
+    // so we render the power on aligned with the tile tops
+    projPos.add([0,0,0.45]);
+
+    return projPos;
+  }
+
   #drawGUI(cnv) {
     cnv.push();
     for (let i = 0; i < this.lifes; i++) {
@@ -674,6 +727,8 @@ class QbertGame {
       for (const entity of tileEntities) {
         if (entity instanceof Qbert) {
           entities.push([this.#qbertProjPos(pos, entity), entity])
+        } else if (entity instanceof PowerDisk) {
+          entities.push([this.#diskProjPos(pos, entity), entity])
         } else {
           entities.push([this.#entityProjPos(pos, entity), entity])
         }

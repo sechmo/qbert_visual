@@ -96,34 +96,12 @@ class IsometricMap {
   static sprites = {};
 
   constructor(tilePos, proj, spriteSheet) {
-    IsometricMap.#loadSprites(spriteSheet);
     this.tiles = tilePos.map((p) => new Tile(p, proj));
     this.proj = proj;
     this.powerTiles = [];
     this.#sortTiles();
   }
 
-  static #loadSprites(spriteSheet) {
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 4; j++) {
-        spriteSheet.addSpec(
-          "power" + (j + i * 4),
-          (j + i * 5) * 16,
-          22 * 16,
-          16,
-          16
-        );
-      }
-    }
-
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 4; j++) {
-        IsometricMap.sprites[j + i * 4] = spriteSheet.getSprite(
-          "power" + (j + i * 4)
-        );
-      }
-    }
-  }
 
   #sortTiles() {
     this.tiles.sort((t1, t2) => {
@@ -149,23 +127,23 @@ class IsometricMap {
     });
   }
 
-  updatePowers(pos, flag = true) {
-    if (flag) {
-      const spriteIndex = floor(random(32));
-      // console.log("AAAA", IsometricMap.sprites[spriteIndex]);
-      this.powerTiles.push(
-        new PowerTile(pos, this.proj, IsometricMap.sprites[spriteIndex])
-      );
-    } else {
-      for (let i = 0; i < this.powerTiles.length; i++) {
-        let position = this.powerTiles[i].pos;
-        if (position.x == pos.x && position.y == pos.y) {
-          this.powerTiles.splice(i, 1);
-          break;
-        }
-      }
-    }
-  }
+  // updatePowers(pos, flag = true) {
+  //   if (flag) {
+  //     const spriteIndex = floor(random(32));
+  //     // console.log("AAAA", IsometricMap.sprites[spriteIndex]);
+  //     this.powerTiles.push(
+  //       new PowerTile(pos, this.proj, IsometricMap.sprites[spriteIndex])
+  //     );
+  //   } else {
+  //     for (let i = 0; i < this.powerTiles.length; i++) {
+  //       let position = this.powerTiles[i].pos;
+  //       if (position.x == pos.x && position.y == pos.y) {
+  //         this.powerTiles.splice(i, 1);
+  //         break;
+  //       }
+  //     }
+  //   }
+  // }
 
   visitTile(pos) {
     for (const tile of this.tiles) {

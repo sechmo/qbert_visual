@@ -300,3 +300,53 @@ class Snake extends Enemy {
     this.drawDebug(cnv,pos);
   }
 }
+
+class PowerDisk {
+  static sprites = {}
+  static spritesLoaded = false
+  constructor(spriteSheet) {
+    PowerDisk.#loadSprites(spriteSheet);
+    this.palette = round(random(0,7));
+    this.frameCount = 0;
+  }
+
+  static #loadSprites(spriteSheet) {
+    if (this.spritesLoaded) {
+      return;
+    }
+
+    for (let palette = 0; palette < 8; palette++) {
+      for (let state = 0; state < 4; state++) {
+        const name = `power_${palette}_${state}`;
+        spriteSheet.addSpec(
+          name,
+          (state + palette * 5) * 16,
+          22 * 16,
+          16,
+          16
+        );
+        if (!PowerDisk.sprites[palette]) {
+          PowerDisk.sprites[palette] = {};
+        }
+
+        PowerDisk.sprites[palette][state] = spriteSheet.getSprite(name);
+      }
+    }
+
+  }
+
+  draw(cnv, pos) {
+
+    // it rotates each 20 ticks
+    const state = round(this.frameCount / 20) % 4
+    const sprite = PowerDisk.sprites[this.palette][state]
+
+
+    cnv.image(sprite, pos.x, pos.y);
+
+  }
+
+  update() {
+    this.frameCount++;
+  }
+}
