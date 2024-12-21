@@ -57,7 +57,7 @@ class SpriteText {
         SpriteText.sprites[typefaceOffset][numbers[i]] = SpriteText.spriteSheet.getSprite(name);
       }
 
-      const letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V"]
+      const letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V","W","X","Y","Z"]
 
       for (let j = 0; j < letters.length; j++) {
         const name = `${typefaceName}_${letters[j]}`;
@@ -83,13 +83,28 @@ class SpriteText {
 
   }
 
-  static drawText(cnv, text, typeface, x, y) {
+  static drawText(cnv, text, typeface, x, y, scale) {
+    scale = scale || 1;
+    cnv.noSmooth();
+    let line = 0;
+    let horizontal = 0
     for (let i = 0; i < text.length; i++) {
       const sprite = SpriteText.sprites[typeface][text.charAt(i).toUpperCase()];
 
-      if (sprite) {
-        cnv.image(sprite, x + 8 * i, y);
+      if (text.charAt(i) === "\n") {
+        line++;
+        horizontal = 0
+        continue;
       }
+
+
+
+      if (sprite) {
+        cnv.image(sprite, x + horizontal, y + 8 * scale * line, 8 * scale, 8 * scale);
+      }
+
+
+      horizontal += 8 * scale;
 
     }
   }

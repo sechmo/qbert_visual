@@ -37,7 +37,7 @@ class QbertGame {
     this.deadQbert = false;
     this.gameState = GAME_STATE.PLAYING
     this.fall = true;
-    this.lifes = 3;
+    this.lives = 3;
     this.qbert = new Qbert(spriteSheet);
     this.entities[this.zeroPlane.x][this.zeroPlane.y].push(this.qbert);
     this.tileStates[0][5] = 1;
@@ -196,12 +196,12 @@ class QbertGame {
 
 
     if (this.deadQbert) {
-      this.lifes--;
+      this.lives--;
       this.#updateScore(-50);
     }
 
 
-    if (this.lifes == 0) {
+    if (this.lives == 0) {
       this.gameState = GAME_STATE.GAME_OVER;
       return;
     }
@@ -263,11 +263,11 @@ class QbertGame {
           // move the entity to the next tile
           let newPos;
           if (qbert.wasOnDisk) {
-            newPos = this.#moveEntityTo(pos, qbert, createVector(0,0));
+            newPos = this.#moveEntityTo(pos, qbert, createVector(0, 0));
             qbert.wasOnDisk = false;
 
           } else {
-            newPos  = this.#moveEntityMap(pos, qbert, qbert.direction);
+            newPos = this.#moveEntityMap(pos, qbert, qbert.direction);
 
           }
 
@@ -279,6 +279,7 @@ class QbertGame {
             if (this.#powerAtPos(newPos)) {
 
               qbert.startOnDisk();
+              this.#updateScore(20);
               return;
             }
 
@@ -348,7 +349,7 @@ class QbertGame {
           this.#removeEntityMap(pos, snake);
           // extra points for dodging it
           this.#updateScore(20);
-          
+
         }
         return;
       case STATE.IDLE:
@@ -357,7 +358,7 @@ class QbertGame {
           // move the entity to the next frame
           const newPos = this.#moveEntityMap(pos, snake, snake.direction);
 
-          if (!this.#getMapHeight(newPos.x,newPos.y)) {
+          if (!this.#getMapHeight(newPos.x, newPos.y)) {
             snake.startFall();
             return;
           }
@@ -419,7 +420,7 @@ class QbertGame {
           // move the entity to the next tile
           const newPos = this.#moveEntityMap(pos, enemy, enemy.direction);
 
-          if (!this.#getMapHeight(newPos.x,newPos.y)) {
+          if (!this.#getMapHeight(newPos.x, newPos.y)) {
             enemy.startFall();
             return;
           }
@@ -479,7 +480,7 @@ class QbertGame {
       if (this.#getMapHeight(newPos.x, newPos.y)) {
         this.#visitTile(newPos)
       }
-    }  
+    }
     this.entities[newPos.x + 1][newPos.y + 1].push(entity);
 
     return newPos;
@@ -492,7 +493,7 @@ class QbertGame {
       if (this.#getMapHeight(newPos.x, newPos.y)) {
         this.#visitTile(newPos)
       }
-    }  
+    }
     this.entities[newPos.x + 1][newPos.y + 1].push(entity);
 
     return newPos;
@@ -673,8 +674,8 @@ class QbertGame {
       } else if (qbert.frameCount > 14) {
 
 
-        const previousHeight = this.#getMapHeight(0,0) + 1;
-        const targetHeight = this.#getMapHeight(0,0);
+        const previousHeight = this.#getMapHeight(0, 0) + 1;
+        const targetHeight = this.#getMapHeight(0, 0);
 
         // falling 
         const t = qbert.frameCount - 14;
@@ -683,9 +684,9 @@ class QbertGame {
         const height = easeIn(t, previousHeight, targetHeight, 5);
 
 
-        currPos = createVector(0,0, height);
+        currPos = createVector(0, 0, height);
 
-      }else {
+      } else {
         let nextPos = createVector(0, 0);
         let nextHeight = this.#getMapHeight(0, 0) + 1;
         let jump = nextHeight - currentHeight;
@@ -849,14 +850,14 @@ class QbertGame {
 
   #drawGUI(cnv) {
     cnv.push();
-    SpriteText.drawText(cnv, "lives", TYPEFACE.ORANGE_BOLD,10, 9);
-    for (let i = 0; i < this.lifes; i++) {
+    SpriteText.drawText(cnv, "lives", TYPEFACE.ORANGE_BOLD, 10, 9);
+    for (let i = 0; i < this.lives; i++) {
       cnv.image(QbertGame.sprites.LIFE, 10 + 16 * i, 22, 8, 16);
     }
 
 
-    SpriteText.drawText(cnv, "score", TYPEFACE.ORANGE_BOLD,255 - 48, 9);
-    SpriteText.drawText(cnv, `${this.score}`, TYPEFACE.GREEN_MEDIUM,255 - 48, 18);
+    SpriteText.drawText(cnv, "score", TYPEFACE.ORANGE_BOLD, 255 - 48, 9);
+    SpriteText.drawText(cnv, `${this.score}`, TYPEFACE.GREEN_MEDIUM, 255 - 48, 18);
 
 
     cnv.pop();
@@ -947,17 +948,47 @@ function drawGameOver(cnv) {
   }
 
   cnv.push();
-  const w = round(screenSize.x * 0.8);
-  const h = round(screenSize.y * 0.8);
+  const w = round(screenSize.x * 0.5);
+  const h = round(screenSize.y * 0.5);
   cnv.rectMode(CENTER);
-  cnv.fill("blue");
+  cnv.fill(color(0, 0, 0, 200));
   cnv.rect(round(screenSize.x / 2), round(screenSize.y / 2), w, h);
-  cnv.fill("white");
-  cnv.textAlign(CENTER, CENTER);
-  cnv.textSize(50);
-  cnv.text("GAME\nOVER", round(screenSize.x / 2), round(screenSize.y / 2) - 20);
-  cnv.textSize(20);
-  cnv.text("press any key\nto restart", round(screenSize.x / 2), round(screenSize.y / 2) + 60);
+  // cnv.textAlign(CENTER, CENTER);
+  // cnv.textSize(50);
+  // cnv.text("GAME\nOVER", round(screenSize.x / 2), round(screenSize.y / 2) - 20);
+
+  let scale = 3
+  SpriteText.drawText(
+    cnv,
+    "GAME\nOVER",
+    TYPEFACE.ORANGE_BOLD,
+    round(screenSize.x / 2 - 1.5 * scale * 8),
+    round(screenSize.y / 2 - 1.5 * scale * 8),
+    scale,
+  )
+
+  scale = 2;
+  const scoreText = `${game.score}`;
+  SpriteText.drawText(
+    cnv,
+    scoreText,
+    TYPEFACE.GREEN_MEDIUM,
+    round(screenSize.x / 2 - (scoreText.length/2 -0.5) * scale * 8),
+    round(screenSize.y / 2 + 1 * scale * 8),
+    scale,
+  )
+
+  scale = 1;
+  SpriteText.drawText(
+    cnv,
+    "press any key\n to restart",
+    TYPEFACE.PURPLE_LIGHT,
+    round(screenSize.x / 2 - (6) * scale * 8),
+    round(screenSize.y / 2 + 4.5 * scale * 8),
+    scale,
+  )
+  // cnv.textSize(20);
+  // cnv.text("press any key\nto restart", round(screenSize.x / 2), round(screenSize.y / 2) + 60);
   cnv.pop();
 
 }
@@ -972,17 +1003,42 @@ function drawVictory(cnv) {
   }
 
   cnv.push();
-  const w = round(screenSize.x * 0.8);
-  const h = round(screenSize.y * 0.8);
+  const w = round(screenSize.x * 0.5);
+  const h = round(screenSize.y * 0.5);
   cnv.rectMode(CENTER);
-  cnv.fill("green");
+  cnv.fill(color(0, 0, 0, 200));
   cnv.rect(round(screenSize.x / 2), round(screenSize.y / 2), w, h);
-  cnv.fill("white");
-  cnv.textAlign(CENTER, CENTER);
-  cnv.textSize(50);
-  cnv.text("Victory", round(screenSize.x / 2), round(screenSize.y / 2) - 20);
-  cnv.textSize(20);
-  cnv.text("press any key\nto restart", round(screenSize.x / 2), round(screenSize.y / 2) + 60);
+
+  let scale = 3
+  SpriteText.drawText(
+    cnv,
+    "YOU\nWIN",
+    TYPEFACE.ORANGE_BOLD,
+    round(screenSize.x / 2 - 1 * scale * 8),
+    round(screenSize.y / 2 - 1.5 * scale * 8),
+    scale,
+  )
+
+  scale = 2;
+  const scoreText = `${game.score}`;
+  SpriteText.drawText(
+    cnv,
+    scoreText,
+    TYPEFACE.GREEN_MEDIUM,
+    round(screenSize.x / 2 - (scoreText.length/2 -0.5) * scale * 8),
+    round(screenSize.y / 2 + 1 * scale * 8),
+    scale,
+  )
+
+  scale = 1;
+  SpriteText.drawText(
+    cnv,
+    "press any key\n to restart",
+    TYPEFACE.PURPLE_LIGHT,
+    round(screenSize.x / 2 - (6) * scale * 8),
+    round(screenSize.y / 2 + 4.5 * scale * 8),
+    scale,
+  )
   cnv.pop();
 
 }
@@ -996,9 +1052,11 @@ function draw() {
       game.draw(buffer);
       break;
     case GAME_STATE.GAME_OVER:
+      game.draw(buffer);
       drawGameOver(buffer);
       break
     case GAME_STATE.VICTORY:
+      game.draw(buffer);
       drawVictory(buffer);
       break;
   }
