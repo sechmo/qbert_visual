@@ -353,20 +353,9 @@ class QbertGame {
     }
 
     if (this.lifes == 0) {
-      console.log("GAME OVER");
       this.gameOver = true;
     }
 
-    if (!this.deadQbert || !this.fall) {
-      // if (this.lifes == 3 || !this.fall) {
-      //   noLoop();
-      // } else {
-      //   this.removeEnemies();
-      //   this.gameOver = true;
-      //   this.lifes += 1;
-      // }
-      // return;
-    } 
   }
 
   removeEnemies() {
